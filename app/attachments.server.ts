@@ -10,7 +10,12 @@ import { cardAttachments } from "./db/schema";
 export const attachmentKey = (cardId: string, id: string) => `cards/${cardId}/${id}`;
 
 export async function saveCardWithAttachments(
-  db: Database, bucket: R2Bucket, cardId: string, form: FormData, mutation: BatchItem<"sqlite">,
+  db: Database,
+  bucket: R2Bucket,
+  cardId: string,
+  form: FormData,
+  mutation: (coverAttachmentId: string | null) => BatchItem<"sqlite"> | BatchItem<"sqlite">[],
+  options: { allowCover: boolean; currentCoverAttachmentId?: string | null },
 ) {
   const fail = (error: string, status = 400) => data({ ok: false as const, error }, { status });
   const fields = form.getAll("attachments");
@@ -44,6 +49,36 @@ export async function saveCardWithAttachments(
     });
   }
 
+  let coverAttachmentId: string | null = null;
+  if (options.allowCover) {
+    const coverField = form.get("coverAttachment");
+    if (coverField !== null && typeof coverField !== "string") {
+      return fail("Choose a valid JPG cover image.");
+    }
+    const coverChoice = typeof coverField === "string"
+      ? coverField
+      : options.currentCoverAttachmentId
+        ? `existing:${options.currentCoverAttachmentId}`
+        : "";
+    if (coverChoice.startsWith("existing:")) {
+      const id = coverChoice.slice("existing:".length);
+      const attachment = existing.find((item) => item.id === id);
+      if (!attachment || attachment.contentType !== "image/jpeg") {
+        return fail("Choose a valid JPG cover image.");
+      }
+      if (!removedIds.includes(id)) coverAttachmentId = id;
+    } else if (coverChoice.startsWith("upload:")) {
+      const index = Number(coverChoice.slice("upload:".length));
+      const upload = Number.isInteger(index) ? uploads[index] : undefined;
+      if (!upload || upload.contentType !== "image/jpeg") {
+        return fail("Choose a valid JPG cover image.");
+      }
+      coverAttachmentId = upload.id;
+    } else if (coverChoice) {
+      return fail("Choose a valid JPG cover image.");
+    }
+  }
+
   const uploadedKeys: string[] = [];
   try {
     for (const upload of uploads) {
@@ -53,14 +88,19 @@ export async function saveCardWithAttachments(
     }
     // Card edits and attachment metadata commit together. Failed saves clean up
     // new blobs and keep all previously saved attachments intact.
+    const mutations = mutation(coverAttachmentId);
+    const [firstMutation, ...remainingMutations] = Array.isArray(mutations) ? mutations : [mutations];
+    if (!firstMutation) throw new Error("A card save requires at least one database mutation.");
     await db.batch([
-      mutation,
+      firstMutation,
+      ...remainingMutations,
       ...uploads.map(({ file, ...metadata }) => db.insert(cardAttachments).values(metadata)),
       ...(removedIds.length ? [db.delete(cardAttachments).where(and(
         eq(cardAttachments.cardId, cardId), inArray(cardAttachments.id, removedIds as string[]),
       ))] : []),
     ]);
-  } catch {
+  } catch (error) {
+    console.error("Could not save card and attachments", error);
     if (uploadedKeys.length) {
       await bucket.delete(uploadedKeys).catch(() => console.error("Could not clean up failed attachment uploads"));
     }

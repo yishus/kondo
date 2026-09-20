@@ -2,13 +2,20 @@ import { useRef, useState } from "react";
 import { attachmentFileError, attachmentUrl, formatFileSize, MAX_ATTACHMENTS } from "../attachments";
 import type { CardAttachment } from "../db/schema";
 
-export function CardAttachments({ tripId, attachments, disabled }: {
+export function CardAttachments({ tripId, attachments, coverAttachmentId, allowCover, disabled }: {
   tripId: string;
   attachments: CardAttachment[];
+  coverAttachmentId: string | null;
+  allowCover: boolean;
   disabled: boolean;
 }) {
   const [removed, setRemoved] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
+  const [coverChoice, setCoverChoice] = useState(
+    attachments.some((attachment) => attachment.id === coverAttachmentId && attachment.contentType === "image/jpeg")
+      ? `existing:${coverAttachmentId}`
+      : "",
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const count = attachments.length - removed.length + files.length;
   const error = files.map(attachmentFileError).find(Boolean)
@@ -36,9 +43,22 @@ export function CardAttachments({ tripId, attachments, disabled }: {
                   <p className="mt-1 text-xs text-[#626f86]">{removing ? "Will be removed when you save" : `${attachment.contentType === "application/pdf" ? "PDF" : "JPG"} · ${formatFileSize(attachment.size)}`}</p>
                   {!removing && <a href={`${url}?download=1`} className="mt-1 inline-block text-xs font-semibold text-[#0c66e4] hover:underline" aria-label={`Download ${attachment.filename}`}>Download</a>}
                 </div>
+                {allowCover && attachment.contentType === "image/jpeg" && !removing && (
+                  <label className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-[#44546f]">
+                    <input
+                      type="radio"
+                      name="coverAttachment"
+                      value={`existing:${attachment.id}`}
+                      checked={coverChoice === `existing:${attachment.id}`}
+                      onChange={(event) => setCoverChoice(event.target.value)}
+                    />
+                    Cover
+                  </label>
+                )}
                 <button type="button" className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-[#dcdfe4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] shrink-0 text-[#44546f]" aria-label={`${removing ? "Keep" : "Remove"} ${attachment.filename}`} onClick={() => {
                   const next = removing ? removed.filter((id) => id !== attachment.id) : [...removed, attachment.id];
                   setRemoved(next);
+                  if (!removing && coverChoice === `existing:${attachment.id}`) setCoverChoice("");
                   validate(files, next);
                 }}>{removing ? "Undo" : "Remove"}</button>
               </li>
@@ -51,21 +71,45 @@ export function CardAttachments({ tripId, attachments, disabled }: {
         <input className="min-w-0 w-full rounded-[10px] border border-[#b6beca] bg-white px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]" ref={inputRef} name="attachments" type="file" multiple accept=".jpg,.jpeg,.pdf,image/jpeg,application/pdf" aria-describedby="attachment-help" aria-invalid={Boolean(error)} onChange={(event) => {
           const next = Array.from(event.target.files ?? []);
           setFiles(next);
+          if (coverChoice.startsWith("upload:")) setCoverChoice("");
           validate(next, removed);
         }} />
       </label>
       <p id="attachment-help" className="text-xs text-[#626f86]">JPG or PDF · Up to 5 files per card · 10 MB per file. Files are uploaded when you save.</p>
       {files.length > 0 && (
         <div className="rounded-[10px] bg-[#f4f6f8] p-3">
-          <ul aria-label="Files to upload" className="grid gap-1 text-sm">
-            {files.map((file, index) => <li key={index} className="break-words">{file.name} <span className="text-xs text-[#626f86]">({formatFileSize(file.size)})</span></li>)}
+          <ul aria-label="Files to upload" className="grid gap-2 text-sm">
+            {files.map((file, index) => (
+              <li key={index} className="flex items-center justify-between gap-3 break-words">
+                <span>{file.name} <span className="text-xs text-[#626f86]">({formatFileSize(file.size)})</span></span>
+                {allowCover && /\.jpe?g$/i.test(file.name) && (
+                  <label className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-[#44546f]">
+                    <input
+                      type="radio"
+                      name="coverAttachment"
+                      value={`upload:${index}`}
+                      checked={coverChoice === `upload:${index}`}
+                      onChange={(event) => setCoverChoice(event.target.value)}
+                    />
+                    Cover
+                  </label>
+                )}
+              </li>
+            ))}
           </ul>
           <button type="button" className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-[#dcdfe4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] mt-1 text-[#44546f]" onClick={() => {
             if (inputRef.current) inputRef.current.value = "";
             setFiles([]);
+            if (coverChoice.startsWith("upload:")) setCoverChoice("");
             validate([], removed);
           }}>Clear selected files</button>
         </div>
+      )}
+      {allowCover && (
+        <label className="flex items-center gap-2 text-sm text-[#44546f]">
+          <input type="radio" name="coverAttachment" value="" checked={!coverChoice} onChange={() => setCoverChoice("")} />
+          No uploaded cover image
+        </label>
       )}
       {error && <p className="text-sm text-[#ae2a19]" role="alert">{error}</p>}
     </fieldset>

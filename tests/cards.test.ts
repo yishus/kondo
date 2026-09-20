@@ -48,13 +48,22 @@ mock.module("../app/auth.server", () => ({
 const { action, loader, default: TripBoard } = await import("../app/routes/trip");
 const { loader: attachmentLoader } = await import("../app/routes/attachment");
 const { loader: placeSearchLoader } = await import("../app/routes/place-search");
+const { loader: placePhotoLoader } = await import("../app/routes/place-photo");
 const baseline = readFileSync(new URL("../migrations/0000_initial.sql", import.meta.url), "utf8");
+const locationCategoriesMigration = readFileSync(new URL("../migrations/0003_location_categories.sql", import.meta.url), "utf8");
+const expandedLocationCategoriesMigration = readFileSync(new URL("../migrations/0004_expand_location_categories.sql", import.meta.url), "utf8");
+const locationCardCoversMigration = readFileSync(new URL("../migrations/0005_location_card_covers.sql", import.meta.url), "utf8");
+const cityCardLocationsMigration = readFileSync(new URL("../migrations/0006_city_card_locations.sql", import.meta.url), "utf8");
 
 beforeEach(() => {
   storedFiles.clear();
   failUpload = false;
-  sqlite.exec("PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS accommodation_documents; DROP TABLE IF EXISTS accommodations; DROP TABLE IF EXISTS accommodation_places; DROP TABLE IF EXISTS trip_notes; DROP TABLE IF EXISTS trip_todos; DROP TABLE IF EXISTS card_attachments; DROP TABLE IF EXISTS cards; DROP TABLE IF EXISTS day_city_groups; DROP TABLE IF EXISTS trip_days; DROP TABLE IF EXISTS trips; PRAGMA foreign_keys = ON;");
+  sqlite.exec("PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS accommodation_documents; DROP TABLE IF EXISTS accommodations; DROP TABLE IF EXISTS accommodation_places; DROP TABLE IF EXISTS trip_notes; DROP TABLE IF EXISTS trip_todos; DROP TABLE IF EXISTS city_card_locations; DROP TABLE IF EXISTS card_attachments; DROP TABLE IF EXISTS cards; DROP TABLE IF EXISTS day_city_groups; DROP TABLE IF EXISTS trip_days; DROP TABLE IF EXISTS trips; PRAGMA foreign_keys = ON;");
   sqlite.exec(baseline);
+  sqlite.exec(locationCategoriesMigration);
+  sqlite.exec(expandedLocationCategoriesMigration);
+  sqlite.exec(locationCardCoversMigration);
+  sqlite.exec(cityCardLocationsMigration);
   sqlite.exec("INSERT INTO trips(id,title) VALUES ('trip','Japan'),('other','Other'); INSERT INTO trip_days(id,trip_id,trip_date) VALUES ('day','trip','2026-09-14'),('next','trip','2026-09-15'),('foreign','other','2026-09-14'); INSERT INTO cards(id,trip_id,trip_day_id,title) VALUES ('legacy','trip','day','Breakfast');");
 });
 afterAll(() => sqlite.close());
@@ -80,16 +89,18 @@ test("legacy locations remain on the root of the day", async () => {
 test("mixed card types save, edit, and render in one ordered list", async () => {
   const city = await addCard("city");
   const transport = await addCard("transport", { transportMode: "subway", startLocation: "Tokyo", endLocation: "Shibuya", departureTime: "06:30", arrivalTime: "07:00", serviceNumber: "G01", description: "Platform 3" });
-  await addCard("location", { title: "Temple visit" });
+  const location = await addCard("location", { title: "Mountain trail", locationCategory: "hike" });
   expect((await submit({ intent: "update-card", cardId: city.id, title: "Kanto" })).ok).toBe(true);
   expect((await submit({ intent: "update-card", cardId: transport.id, endLocation: "Ginza", transportMode: "train" })).ok).toBe(true);
   const loaderData = await board();
-  expect(loaderData.tripColumns[1].cards.map((card) => card.title)).toEqual(["Breakfast", "Kanto", "Tokyo → Ginza", "Temple visit"]);
+  expect(loaderData.tripColumns[1].cards.map((card) => card.title)).toEqual(["Breakfast", "Kanto", "Tokyo → Ginza", "Mountain trail"]);
   expect(loaderData.tripColumns[1].cards[2]).toMatchObject({ type: "transport", transportMode: "train", startLocation: "Tokyo", endLocation: "Ginza", departureTime: "06:30", description: "Platform 3" });
+  expect(loaderData.tripColumns[1].cards.find((card) => card.id === location.id)).toMatchObject({ type: "location", locationCategory: "hike" });
   const router = createMemoryRouter([{ path: "/", element: createElement(TripBoard, { loaderData } as any) }]);
   const html = renderToStaticMarkup(createElement(RouterProvider, { router }));
   expect(html).toContain("Tokyo → Ginza");
   expect(html).toContain("G01");
+  expect(html).toContain("Location · Hike");
   expect(html).not.toContain("Unassigned");
   router.dispose();
 });
@@ -106,6 +117,52 @@ test("city cards move independently of adjacent locations and transport cards", 
   expect((await board()).tripColumns[0].cards.map((card) => card.id)).toEqual([transport.id]);
 });
 
+test("city cards save multiple Google places with suggested and custom types", async () => {
+  const initialLocations = [
+    { googlePlaceId: "ChIJ_restaurant", googleMapsQuery: "Sushi Dai Tokyo", locationType: "Restaurants" },
+    { googlePlaceId: "ChIJ_coffee", googleMapsQuery: "Glitch Coffee Tokyo", locationType: "Coffee" },
+    { googlePlaceId: "ChIJ_record", googleMapsQuery: "Tower Records Shibuya", locationType: "Record shops" },
+  ];
+  const city = await addCard("city", { cityLocations: JSON.stringify(initialLocations) });
+  expect(city.cityLocations.map(({ googlePlaceId, googleMapsQuery, locationType, position }) => ({ googlePlaceId, googleMapsQuery, locationType, position }))).toEqual(
+    initialLocations.map((location, position) => ({ ...location, position })),
+  );
+
+  const loaderData = await board();
+  const router = createMemoryRouter([{ path: "/", element: createElement(TripBoard, { loaderData } as any) }]);
+  const html = renderToStaticMarkup(createElement(RouterProvider, { router }));
+  expect(html).toContain("3 locations");
+  expect(html).not.toContain("Map of 3 area locations");
+  expect(html).not.toContain("Restaurants");
+  expect(html).not.toContain("Record shops");
+  router.dispose();
+
+  const updatedLocations = [
+    { ...initialLocations[2], locationType: "Music" },
+    { googlePlaceId: "ChIJ_garden", googleMapsQuery: "Shinjuku Gyoen", locationType: "Interest" },
+  ];
+  expect((await submit({ intent: "update-card", cardId: city.id, title: "Tokyo", cityLocations: JSON.stringify(updatedLocations) })).ok).toBe(true);
+  expect((await move(city.id, "next")).ok).toBe(true);
+  expect((await board()).tripColumns[2].cards[0].cityLocations.map((location) => location.locationType)).toEqual(["Music", "Interest"]);
+  expect((await submit({ intent: "delete-card", cardId: city.id })).ok).toBe(true);
+  expect(sqlite.query("SELECT * FROM city_card_locations").all()).toEqual([]);
+});
+
+test("invalid city location lists are rejected without changing saved locations", async () => {
+  const saved = [{ googlePlaceId: "ChIJ_saved", googleMapsQuery: "Saved cafe", locationType: "Coffee" }];
+  const city = await addCard("city", { cityLocations: JSON.stringify(saved) });
+  const attempts = [
+    "not json",
+    JSON.stringify([{ ...saved[0], locationType: "" }]),
+    JSON.stringify([{ ...saved[0], googleMapsQuery: "" }]),
+    JSON.stringify([saved[0], saved[0]]),
+  ];
+  for (const cityLocations of attempts) {
+    expect((await submit({ intent: "update-card", cardId: city.id, title: "Tokyo", cityLocations })).status).toBe(400);
+  }
+  expect((await board()).tripColumns[1].cards.find((card) => card.id === city.id)?.cityLocations).toMatchObject(saved);
+});
+
 test("rejects invalid types, empty names, incomplete transport, and foreign days", async () => {
   const before = sqlite.query("SELECT * FROM cards ORDER BY id").all();
   for (const extra of [
@@ -114,6 +171,7 @@ test("rejects invalid types, empty names, incomplete transport, and foreign days
     { type: "transport", transportMode: "train", startLocation: "Tokyo" },
     { type: "transport", transportMode: "train", endLocation: "Kyoto" },
     { type: "transport", transportMode: "train", startLocation: "Tokyo", endLocation: "Kyoto", departureTime: "25:00" },
+    { type: "location", locationCategory: "invalid" },
     { tripDayId: "foreign" },
   ]) expect((await submit({ intent: "add-card", tripDayId: "day", title: "Test", ...extra } as Record<string, string>)).ok).toBe(false);
   expect((await submit({ intent: "update-card", cardId: "legacy", type: "city", title: "Tokyo" })).status).toBe(400);
@@ -222,17 +280,17 @@ test("unscheduled cards reject stale moves and cross-trip access", async () => {
 });
 
 test("card locations can be added, preserved during edits and moves, replaced, and removed", async () => {
-  expect((await submit({ intent: "add-card", tripDayId: "unscheduled", title: "Museum", googlePlaceId: "ChIJ_museum", googleMapsQuery: "Museum Tokyo" })).ok).toBe(true);
+  expect((await submit({ intent: "add-card", tripDayId: "unscheduled", title: "Museum", locationCategory: "place_of_interest", googlePlaceId: "ChIJ_museum", googleMapsQuery: "Museum Tokyo" })).ok).toBe(true);
   const card = (await board()).tripColumns[0].cards[0];
-  expect(card).toMatchObject({ googlePlaceId: "ChIJ_museum", googleMapsQuery: "Museum Tokyo" });
-  expect((await submit({ intent: "update-card", cardId: card.id, title: "Museum afternoon" })).ok).toBe(true);
+  expect(card).toMatchObject({ locationCategory: "place_of_interest", googlePlaceId: "ChIJ_museum", googleMapsQuery: "Museum Tokyo" });
+  expect((await submit({ intent: "update-card", cardId: card.id, title: "Museum afternoon", locationCategory: "food" })).ok).toBe(true);
   expect((await move(card.id, "day", { fromDayId: "unscheduled" })).ok).toBe(true);
-  expect((await board()).tripColumns[1].cards.find((item) => item.id === card.id)).toMatchObject({ googlePlaceId: "ChIJ_museum", googleMapsQuery: "Museum Tokyo" });
+  expect((await board()).tripColumns[1].cards.find((item) => item.id === card.id)).toMatchObject({ locationCategory: "food", googlePlaceId: "ChIJ_museum", googleMapsQuery: "Museum Tokyo" });
   expect((await move(card.id, "unscheduled")).ok).toBe(true);
   expect((await submit({ intent: "update-card", cardId: card.id, title: "Garden", googlePlaceId: "ChIJ_garden", googleMapsQuery: "Garden Tokyo" })).ok).toBe(true);
   expect((await board()).tripColumns[0].cards[0]).toMatchObject({ googlePlaceId: "ChIJ_garden", googleMapsQuery: "Garden Tokyo" });
-  expect((await submit({ intent: "update-card", cardId: card.id, title: "Garden", googlePlaceId: "", googleMapsQuery: "" })).ok).toBe(true);
-  expect((await board()).tripColumns[0].cards[0]).toMatchObject({ googlePlaceId: null, googleMapsQuery: null });
+  expect((await submit({ intent: "update-card", cardId: card.id, title: "Garden", locationCategory: "", googlePlaceId: "", googleMapsQuery: "" })).ok).toBe(true);
+  expect((await board()).tripColumns[0].cards[0]).toMatchObject({ locationCategory: null, googlePlaceId: null, googleMapsQuery: null });
 });
 
 test("invalid or cross-trip location edits leave the card unchanged", async () => {
@@ -260,6 +318,24 @@ test("place search checks the trip and reports missing configuration without cac
   }
 });
 
+test("place photo lookup is card-scoped, private, and reports missing configuration", async () => {
+  expect((await submit({ intent: "add-card", tripDayId: "unscheduled", title: "Museum", googlePlaceId: "ChIJ_museum", googleMapsQuery: "Museum Tokyo" })).ok).toBe(true);
+  const card = (await board()).tripColumns[0].cards[0];
+  const response = await placePhotoLoader({
+    params: { tripId: "trip", cardId: card.id },
+    request: new Request("http://localhost/photo"),
+  } as any);
+  expect(response.status).toBe(503);
+  expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+  expect(await response.json()).toEqual({ photo: null, error: "A Google Maps photo is unavailable." });
+
+  const foreign = await placePhotoLoader({
+    params: { tripId: "other", cardId: card.id },
+    request: new Request("http://localhost/photo"),
+  } as any);
+  expect(foreign.status).toBe(404);
+});
+
 async function saveFiles(files: File[], fields: Record<string, string> = {}, tripId = "trip") {
   const form = new FormData();
   for (const [key, value] of Object.entries({ intent: "update-card", cardId: "legacy", title: "Breakfast", ...fields })) form.set(key, value);
@@ -271,6 +347,7 @@ async function saveFiles(files: File[], fields: Record<string, string> = {}, tri
   return result.data ? { ...result.data, status: result.init.status } : { ...result, status: 200 };
 }
 const pdfFile = () => new File(["%PDF-1.4\nTest attachment\n%%EOF"], "booking.pdf", { type: "application/pdf" });
+const jpgFile = () => new File([new Uint8Array([255, 216, 255, 224, 0, 16, 255, 217])], "photo.jpg", { type: "image/jpeg" });
 
 test("JPG and PDF attachments persist with cards, can be downloaded, and follow moves", async () => {
   const jpg = new File([new Uint8Array([255, 216, 255, 224, 0, 16, 255, 217])], "photo.JPG", { type: "image/jpeg" });
@@ -288,6 +365,32 @@ test("JPG and PDF attachments persist with cards, can be downloaded, and follow 
   expect((await board()).tripColumns[0].cards[0].attachments).toHaveLength(1);
   expect(storedFiles.size).toBe(1);
   await expect(attachmentLoader({ params: { tripId: "trip", cardId: "legacy", attachmentId: file.id }, request: new Request("http://localhost/file") } as any)).rejects.toMatchObject({ status: 404 });
+});
+
+test("location cards can select, preserve, clear, and remove an uploaded JPG cover", async () => {
+  expect((await saveFiles([jpgFile()], { coverAttachment: "upload:0" })).ok).toBe(true);
+  let card = (await board()).tripColumns[1].cards[0];
+  const photo = card.attachments[0];
+  expect(card.coverAttachmentId).toBe(photo.id);
+
+  const loaderData = await board();
+  const router = createMemoryRouter([{ path: "/", element: createElement(TripBoard, { loaderData } as any) }]);
+  const html = renderToStaticMarkup(createElement(RouterProvider, { router }));
+  expect(html).toContain("Breakfast cover");
+  expect(html).toContain(`/attachments/${photo.id}`);
+  router.dispose();
+
+  expect((await move("legacy", "unscheduled")).ok).toBe(true);
+  expect((await board()).tripColumns[0].cards[0].coverAttachmentId).toBe(photo.id);
+  expect((await saveFiles([], { coverAttachment: "" })).ok).toBe(true);
+  expect((await board()).tripColumns[0].cards[0].coverAttachmentId).toBeNull();
+  expect((await saveFiles([], { coverAttachment: `existing:${photo.id}` })).ok).toBe(true);
+  expect((await saveFiles([], { removeAttachmentId: photo.id })).ok).toBe(true);
+  card = (await board()).tripColumns[0].cards[0];
+  expect(card).toMatchObject({ coverAttachmentId: null, attachments: [] });
+
+  expect((await saveFiles([pdfFile()], { coverAttachment: "upload:0" })).status).toBe(400);
+  expect(storedFiles.size).toBe(0);
 });
 
 test("attachment validation rejects unsupported, disguised, oversized, and excessive files before saving", async () => {

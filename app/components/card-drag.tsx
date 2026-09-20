@@ -7,7 +7,8 @@ import { useId, useState, type ReactNode } from "react";
 
 import { googleMapsUrl } from "../card-location";
 import type { CardDestination, CardMove, TripCard } from "../card-order";
-import { cardTypes, transportModes } from "../card-types";
+import { cardTypes, locationCategories, transportModes } from "../card-types";
+import { CardCover } from "./card-cover";
 
 // Pointer drops must actually be inside a target. Keyboard movement snaps to
 // measured targets, including empty days.
@@ -143,12 +144,22 @@ export function DraggableCard({ card, disabled, onOpen }: {
         </svg>
       </button>
       <div className="flex min-w-0 flex-1 flex-col">
+        <CardCover card={card} />
         <span className="mt-3 text-[10px] font-bold uppercase tracking-wide text-[#626f86]">
-          {card.type === "transport" ? transportModes[card.transportMode as keyof typeof transportModes] ?? "Transport" : cardTypes[card.type]}
+          {card.type === "transport"
+            ? transportModes[card.transportMode as keyof typeof transportModes] ?? "Transport"
+            : card.type === "location" && card.locationCategory
+              ? `${cardTypes.location} · ${locationCategories[card.locationCategory]}`
+              : cardTypes[card.type]}
         </span>
-        <button type="button" className="trip-card-title min-w-0 flex-1 cursor-pointer rounded-r-[9px] pt-1 pr-3 pb-3 text-left wrap-anywhere disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]" aria-haspopup="dialog" onClick={onOpen} disabled={disabled}>
+        <button type="button" className={`trip-card-title min-w-0 flex-1 cursor-pointer rounded-r-[9px] pt-1 pr-3 text-left wrap-anywhere disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] ${card.type === "city" ? "pb-1" : "pb-3"}`} aria-haspopup="dialog" onClick={onOpen} disabled={disabled}>
           {card.title}
         </button>
+        {card.type === "city" && (
+          <span className="mb-3 text-xs text-[#626f86]">
+            {card.cityLocations.length} {card.cityLocations.length === 1 ? "location" : "locations"}
+          </span>
+        )}
         {card.type === "transport" && (card.departureTime || card.arrivalTime || card.serviceNumber) && (
           <span className="mb-2 text-xs text-[#626f86]">{[card.departureTime && `Dep. ${card.departureTime}`, card.arrivalTime && `Arr. ${card.arrivalTime}`, card.serviceNumber].filter(Boolean).join(" · ")}</span>
         )}

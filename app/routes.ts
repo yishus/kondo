@@ -14,5 +14,6 @@ export default [
   ]),
   route("trips/:tripId/accommodations/:accommodationId/documents/:documentId", "routes/accommodation-document.ts"),
   route("trips/:tripId/places", "routes/place-search.ts"),
+  route("trips/:tripId/cards/:cardId/place-photo", "routes/place-photo.ts"),
   route("trips/:tripId/cards/:cardId/attachments/:attachmentId", "routes/attachment.ts"),
 ] satisfies RouteConfig;

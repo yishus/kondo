@@ -7,9 +7,12 @@ import { v7 as uuidv7 } from "uuid";
 import type { Route } from "./+types/trip";
 import { requireTripOwner } from "../auth.server";
 import { getDb } from "../db.server";
-import { accommodations, accommodationPlaces, cards, cardAttachments, tripDays, trips } from "../db/schema";
-import { cardTypes, transportModes, readCardDetails, type CardType } from "../card-types";
+import { accommodations, accommodationPlaces, cards, cardAttachments, cityCardLocations, tripDays, trips } from "../db/schema";
+import { cardTypes, locationCategories, transportModes, readCardDetails, type CardType } from "../card-types";
 import { googleMapsUrl, readCardLocation, type CardLocation } from "../card-location";
+import { readCityLocations } from "../city-locations";
+import { CityLocationsEditor } from "../components/city-locations-editor";
+import { CityLocationsMap } from "../components/city-locations-map";
 import { CardLocationPicker } from "../components/card-location";
 import { TransportRouteMap } from "../components/transport-route-map";
 import { saveCardWithAttachments } from "../attachments.server";
@@ -74,7 +77,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     throw new Response("Trip not found", { status: 404 });
   }
 
-  const [dayRows, cardRows, attachmentRows, stayRows] = await Promise.all([
+  const [dayRows, cardRows, attachmentRows, cityLocationRows, stayRows] = await Promise.all([
     db
       .select({ id: tripDays.id, date: tripDays.tripDate })
       .from(tripDays)
@@ -89,6 +92,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       .innerJoin(cards, eq(cards.id, cardAttachments.cardId))
       .where(eq(cards.tripId, trip.id))
       .orderBy(asc(cardAttachments.createdAt), asc(cardAttachments.id)),
+    db.select({ location: cityCardLocations }).from(cityCardLocations)
+      .innerJoin(cards, eq(cards.id, cityCardLocations.cardId))
+      .where(eq(cards.tripId, trip.id))
+      .orderBy(asc(cityCardLocations.position), asc(cityCardLocations.id)),
     db.select({ accommodation: accommodations, placeName: accommodationPlaces.name })
       .from(accommodations)
       .innerJoin(accommodationPlaces, eq(accommodations.placeId, accommodationPlaces.id))
@@ -105,6 +112,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       ...card,
       tripDayId: columnId,
       attachments: attachmentRows.filter(({ attachment }) => attachment.cardId === card.id).map(({ attachment }) => attachment),
+      cityLocations: cityLocationRows.filter(({ location }) => location.cardId === card.id).map(({ location }) => location),
     });
     cardsByDay.set(columnId, cards);
   }
@@ -282,20 +290,33 @@ export async function action({ params, request }: Route.ActionArgs) {
     if (!details.ok) return data({ ok: false as const, error: details.error }, { status: 400 });
     const location = readCardLocation(details.details.type === "location" ? formData : new FormData());
     if (!location.ok) return data({ ok: false as const, error: location.error }, { status: 400 });
+    const areaLocations = readCityLocations(formData, details.details.type);
+    if (!areaLocations.ok) return data({ ok: false as const, error: areaLocations.error }, { status: 400 });
 
     const cardId = uuidv7();
-    return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, db.insert(cards).values({
-      ...location.location,
-      id: cardId,
-      tripId: trip.id,
-      tripDayId,
-      ...details.details,
-      position: sql<number>`(
-        SELECT COALESCE(MAX(position) + 1, 0)
-        FROM cards
-        WHERE trip_id = ${trip.id} AND ${tripDayId === null ? isNull(cards.tripDayId) : eq(cards.tripDayId, tripDayId)}
-      )`,
-    }));
+    return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, (coverAttachmentId) => [
+      db.insert(cards).values({
+        ...location.location,
+        id: cardId,
+        tripId: trip.id,
+        tripDayId,
+        ...details.details,
+        coverAttachmentId,
+        position: sql<number>`(
+          SELECT COALESCE(MAX(position) + 1, 0)
+          FROM cards
+          WHERE trip_id = ${trip.id} AND ${tripDayId === null ? isNull(cards.tripDayId) : eq(cards.tripDayId, tripDayId)}
+        )`,
+      }),
+      ...areaLocations.locations.map((areaLocation, position) => db.insert(cityCardLocations).values({
+        id: uuidv7(),
+        cardId,
+        ...areaLocation,
+        position,
+      })),
+    ],
+      { allowCover: details.details.type === "location" },
+    );
   }
 
   if (intent === "update-card") {
@@ -317,18 +338,35 @@ export async function action({ params, request }: Route.ActionArgs) {
     if (!details.ok) return data({ ok: false as const, error: details.error }, { status: 400 });
     const location = readCardLocation(details.details.type === "location" ? formData : new FormData(), card);
     if (!location.ok) return data({ ok: false as const, error: location.error }, { status: 400 });
+    const savedAreaLocations = card.type === "city"
+      ? await db.select().from(cityCardLocations).where(eq(cityCardLocations.cardId, cardId)).orderBy(asc(cityCardLocations.position))
+      : [];
+    const areaLocations = readCityLocations(formData, details.details.type, savedAreaLocations);
+    if (!areaLocations.ok) return data({ ok: false as const, error: areaLocations.error }, { status: 400 });
 
-    return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, db
-      .update(cards)
-      .set({
-        ...location.location,
-        ...details.details,
-        updatedAt: sql`CURRENT_TIMESTAMP`,
-      })
-      .where(
-        and(eq(cards.id, cardId), eq(cards.tripId, trip.id)),
-      )
-      .returning({ id: cards.id }));
+    return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, (coverAttachmentId) => [
+      db.update(cards)
+        .set({
+          ...location.location,
+          ...details.details,
+          coverAttachmentId,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(
+          and(eq(cards.id, cardId), eq(cards.tripId, trip.id)),
+        )
+        .returning({ id: cards.id }),
+      db.delete(cityCardLocations).where(eq(cityCardLocations.cardId, cardId)),
+      ...areaLocations.locations.map((areaLocation, position) => db.insert(cityCardLocations).values({
+        id: uuidv7(),
+        cardId,
+        ...areaLocation,
+        position,
+      })),
+    ], {
+      allowCover: details.details.type === "location",
+      currentCoverAttachmentId: card.coverAttachmentId,
+    });
   }
 
   return data(
@@ -527,7 +565,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [selectedDate, setSelectedDate] = useState("");
   const [addServerError, setAddServerError] = useState<string | null>(null);
   const [activeCard, setActiveCard] = useState<ActiveCard | null>(null);
-  const [cardDraft, setCardDraft] = useState({ type: "location" as CardType, title: "", description: "", transportMode: "train", startLocation: "", endLocation: "", departureTime: "", arrivalTime: "", serviceNumber: "" });
+  const [cardDraft, setCardDraft] = useState({ type: "location" as CardType, title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", departureTime: "", arrivalTime: "", serviceNumber: "" });
   const [cardLocation, setCardLocation] = useState<CardLocation>({ googlePlaceId: null, googleMapsQuery: null });
   const [cardErrorFor, setCardErrorFor] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -546,6 +584,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     : null;
   const activeCardDate = activeCard
     ? tripColumns.find((column) => column.id === activeCard.tripDayId)?.date ?? null
+    : null;
+  const activeSavedCard = activeCard?.mode === "edit"
+    ? tripColumns.flatMap((column) => column.cards).find((card) => card.id === activeCard.cardId) ?? null
     : null;
 
   useEffect(() => {
@@ -602,14 +643,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   function openCard(card: TripCard) {
     setCardLocation({ googlePlaceId: card.googlePlaceId, googleMapsQuery: card.googleMapsQuery });
     setActiveCard({ mode: "edit", cardId: card.id, tripDayId: card.tripDayId });
-    setCardDraft({ ...card, transportMode: card.transportMode ?? "train" });
+    setCardDraft({ ...card, locationCategory: card.locationCategory ?? "", transportMode: card.transportMode ?? "train" });
     setCardErrorFor(null);
   }
 
   function addCard(tripDayId: string) {
     setCardLocation({ googlePlaceId: null, googleMapsQuery: null });
     setActiveCard({ mode: "create", tripDayId });
-    setCardDraft({ type: "location", title: "", description: "", transportMode: "train", startLocation: "", endLocation: "", departureTime: "", arrivalTime: "", serviceNumber: "" });
+    setCardDraft({ type: "location", title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", departureTime: "", arrivalTime: "", serviceNumber: "" });
     setCardErrorFor(null);
   }
 
@@ -824,6 +865,38 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
               )}
 
+              {cardDraft.type === "location" && (
+                <label className="grid min-w-0 gap-1.5 text-sm font-bold">
+                  Subcategory
+                  <select
+                    className="min-w-0 w-full rounded-[10px] border border-[#b6beca] bg-white px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]"
+                    name="locationCategory"
+                    value={cardDraft.locationCategory}
+                    onChange={(event) => setCardDraft((draft) => ({ ...draft, locationCategory: event.target.value }))}
+                  >
+                    <option value="">No subcategory</option>
+                    {Object.entries(locationCategories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
+              )}
+
+              {cardDraft.type === "city" && (
+                <>
+                  {activeSavedCard && activeSavedCard.cityLocations.length > 0 && (
+                    <CityLocationsMap
+                      apiKey={googleMapsBrowserApiKey}
+                      locations={activeSavedCard.cityLocations}
+                    />
+                  )}
+                  <CityLocationsEditor
+                    key={`city-locations:${activeCardKey}`}
+                    tripId={trip.id}
+                    locations={activeSavedCard?.cityLocations ?? []}
+                    disabled={cardFetcher.state !== "idle"}
+                  />
+                </>
+              )}
+
               {cardDraft.type !== "city" && <>
               <div className="grid gap-1.5">
                 <label
@@ -848,6 +921,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
               <CardAttachments key={`attachments:${activeCardKey}`} tripId={trip.id}
                 attachments={activeCard.mode === "edit" ? tripColumns.flatMap((column) => column.cards).find((card) => card.id === activeCard.cardId)?.attachments ?? [] : []}
+                coverAttachmentId={activeCard.mode === "edit" ? tripColumns.flatMap((column) => column.cards).find((card) => card.id === activeCard.cardId)?.coverAttachmentId ?? null : null}
+                allowCover={cardDraft.type === "location"}
                 disabled={cardFetcher.state !== "idle"} />
 
               {cardDraft.type === "location" && <CardLocationPicker key={activeCardKey} tripId={trip.id} location={cardLocation} onChange={setCardLocation} disabled={cardFetcher.state !== "idle"} />}

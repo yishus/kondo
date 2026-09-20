@@ -173,6 +173,11 @@ export const cards = sqliteTable(
     position: integer("position").notNull().default(0),
     googlePlaceId: text("google_place_id"),
     googleMapsQuery: text("google_maps_query"),
+    // The original location_category column had a fixed database constraint.
+    // Store evolving subcategories here so adding choices does not require a
+    // destructive cards-table rebuild.
+    locationCategory: text("location_subcategory", { enum: ["place_of_interest", "food", "hike"] }),
+    coverAttachmentId: text("cover_attachment_id"),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
@@ -227,6 +232,23 @@ export const cardAttachments = sqliteTable("card_attachments", {
 export type CardAttachment = typeof cardAttachments.$inferSelect;
 export type TripDay = typeof tripDays.$inferSelect;
 export type Card = typeof cards.$inferSelect;
+
+export const cityCardLocations = sqliteTable("city_card_locations", {
+  id: text("id").primaryKey(),
+  cardId: text("card_id").notNull().references(() => cards.id, { onDelete: "cascade" }),
+  googlePlaceId: text("google_place_id").notNull(),
+  googleMapsQuery: text("google_maps_query").notNull(),
+  locationType: text("location_type").notNull(),
+  position: integer("position").notNull().default(0),
+}, (table) => [
+  unique("city_card_locations_card_place_unique").on(table.cardId, table.googlePlaceId),
+  index("city_card_locations_card_position_idx").on(table.cardId, table.position),
+  check("city_card_locations_query_check", sql`length(trim(${table.googleMapsQuery})) BETWEEN 1 AND 200`),
+  check("city_card_locations_type_check", sql`length(trim(${table.locationType})) BETWEEN 1 AND 50`),
+  check("city_card_locations_position_check", sql`${table.position} >= 0`),
+]);
+
+export type CityCardLocation = typeof cityCardLocations.$inferSelect;
 
 export const accommodationPlaces = sqliteTable("accommodation_places", {
   id: text("id").primaryKey(),

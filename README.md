@@ -42,7 +42,11 @@ bunx wrangler d1 migrations apply DB --local
 
 The production schema starts with `migrations/0000_initial.sql`. Migration
 `0001_auth_and_trip_owners.sql` adds Better Auth users and shared trip ownership,
-and `0002_auth_rate_limit.sql` adds persistent authentication rate limits.
+`0002_auth_rate_limit.sql` adds persistent authentication rate limits, and
+`0003_location_categories.sql` adds optional location-card subcategories.
+Migration `0004_expand_location_categories.sql` makes that field extensible,
+`0005_location_card_covers.sql` adds uploaded cover-image selection, and
+`0006_city_card_locations.sql` adds typed Google places to city/area cards.
 
 Before deploying code that adds database fields, apply its migrations to the
 remote database with `bunx wrangler d1 migrations apply DB --remote`.
@@ -103,22 +107,30 @@ enabled. Restrict the key to Places API (New) and configure a suitable quota in
 Google Cloud. Restart the dev server after changing `.dev.vars`.
 
 Set `GOOGLE_MAPS_BROWSER_API_KEY` to a separate browser key for interactive
-train and subway route previews. A
+train and subway route previews and city/area location maps. A
 [Maps Demo Key](https://developers.google.com/maps/documentation/javascript/demo-key)
-is suitable for local development. Standard browser keys need Maps JavaScript
-API and Routes API access plus an HTTP referrer restriction. Route previews run
+is suitable for local development. Standard browser keys need Maps JavaScript,
+Places API (New), and Routes API access plus an HTTP referrer restriction. Route previews run
 only when the user requests one, use the transport card's trip day and departure
 or arrival time, and currently interpret that time in the browser's time zone.
 
 For deployment, set the Worker secret with `bunx wrangler secret put GOOGLE_MAPS_API_KEY`.
 The key is never sent to the browser. Search runs when the user clicks Search or
 presses Enter in the location field, using Text Search (New) with five results and
-only names, addresses, IDs, and attribution. No Place Details requests are made.
-Cards store the selected place ID and the user's search text; search result
-names and addresses are not stored. Links use Google's
+only names, addresses, IDs, and attribution. Cards store the selected place ID
+and the user's search text; search result names and addresses are not stored.
+City/area cards can store multiple selected places. Each place has a free-form
+type, with Restaurants, Coffee, and Interest offered as suggestions. Their map
+uses type-colored Advanced Markers and fetches coordinates from the saved Place
+IDs in the browser rather than storing Google coordinates.
+Location cards without an uploaded cover request the first available Places
+photo only as the card approaches the viewport. Photo references and
+short-lived URLs are neither stored nor cached; the card links directly to the
+source photo on Google Maps for attribution. Links use Google's
 [Maps URL format](https://developers.google.com/maps/documentation/urls/get-started).
 Without a key, cards and existing Maps links still work, while search shows an
-unavailable message. Location fields are included in the initial migration.
+unavailable message and Google photo covers remain empty. Location fields are
+included in the initial migration.
 
 ### Accommodations
 
@@ -151,6 +163,9 @@ save the text field. Notes and to-do tables are included in the initial migratio
 
 Cards support up to five JPG/JPEG or PDF attachments, 10 MB each. Attachments are
 uploaded or removed when the card is saved; Cancel discards pending changes.
+Location cards can select one saved or newly selected JPG as their cover image;
+PDF files cannot be covers. An uploaded cover takes priority over the Google
+Places photo fallback.
 File bytes use the `ATTACHMENTS` R2 binding and metadata uses D1. With the local
 dev server, both are persisted under `.wrangler/state`; no bucket creation or
 cloud credentials are needed. Apply local migrations and restart the dev server
@@ -167,8 +182,10 @@ bun run build
 
 Each day contains a single ordered list of cards:
 
-- **Location**: title, description, Google Maps location, and attachments.
-- **City / area / region**: a name, independently movable like any other card.
+- **Location**: title, optional subcategory (Place of interest, Food, or Hike),
+  description, Google Maps location, and attachments.
+- **City / area / region**: a name plus multiple typed Google places displayed
+  together on a color-coded map, independently movable like any other card.
 - **Transport**: mode (including train and subway), start and end locations, with
   optional times, service number, notes, and attachments.
 

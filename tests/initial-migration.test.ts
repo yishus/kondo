@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 
 const migrationDir = new URL("../migrations/", import.meta.url);
 const baseline = readFileSync(new URL("0000_initial.sql", migrationDir), "utf8");
+const locationCategoriesMigration = readFileSync(new URL("0003_location_categories.sql", migrationDir), "utf8");
+const expandedLocationCategoriesMigration = readFileSync(new URL("0004_expand_location_categories.sql", migrationDir), "utf8");
 
 test("the initial schema supports every feature and cascades only the deleted trip", () => {
   const db = new Database(":memory:");
@@ -36,6 +38,24 @@ test("the initial schema supports every feature and cascades only the deleted tr
     expect(db.query("SELECT id FROM trips").values()).toEqual([["other"]]);
     expect(db.query("SELECT id FROM cards").values()).toEqual([["other"]]);
     expect(db.query("SELECT body FROM trip_notes").values()).toEqual([["Keep"]]);
+    expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally { db.close(); }
+});
+
+test("expanding location categories preserves existing cards and attachments", () => {
+  const db = new Database(":memory:");
+  try {
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec(baseline);
+    db.exec(locationCategoriesMigration);
+    db.exec(`
+      INSERT INTO trips(id,title) VALUES ('trip','Japan');
+      INSERT INTO cards(id,trip_id,title,location_category) VALUES ('card','trip','Museum','place_of_interest');
+      INSERT INTO card_attachments(id,card_id,filename,content_type,size) VALUES ('file','card','photo.jpg','image/jpeg',100);
+    `);
+    db.exec(expandedLocationCategoriesMigration);
+    expect(db.query("SELECT location_subcategory FROM cards WHERE id = 'card'").values()).toEqual([["place_of_interest"]]);
+    expect(db.query("SELECT card_id FROM card_attachments WHERE id = 'file'").values()).toEqual([["card"]]);
     expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
   } finally { db.close(); }
 });

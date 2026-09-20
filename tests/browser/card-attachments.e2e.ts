@@ -20,10 +20,13 @@ test("create a card with JPG/PDF files, download, move, cancel removal, and remo
     { name: "photo.jpg", mimeType: "image/jpeg", buffer: Buffer.from(jpg, "base64") },
     { name: "booking.pdf", mimeType: "application/pdf", buffer: pdf },
   ]);
+  await dialog.getByRole("radio", { name: "Cover", exact: true }).check();
   await dialog.getByRole("button", { name: "Add card", exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(parked.getByRole("img", { name: "Tickets and photo cover", exact: true })).toBeVisible();
   await expect(parked).toContainText("2 attachments");
   await page.reload();
+  await expect(parked.getByRole("img", { name: "Tickets and photo cover", exact: true })).toBeVisible();
   await parked.getByRole("button", { name: "Tickets and photo", exact: true }).click();
   const photo = dialog.getByRole("link", { name: "photo.jpg", exact: true });
   const photoUrl = (await photo.getAttribute("href"))!;

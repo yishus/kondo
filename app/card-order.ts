@@ -1,15 +1,16 @@
-import type { CardAttachment, Card } from "./db/schema";
+import type { CardAttachment, Card, CityCardLocation } from "./db/schema";
 import type { CardLocation } from "./card-location";
 
 // UI/drop-target ID only; unscheduled cards have a null trip_day_id in storage.
 export const UNSCHEDULED_COLUMN_ID = "unscheduled";
 
-export type TripCard = CardLocation & Pick<Card, "type" | "transportMode" | "startLocation" | "endLocation" | "departureTime" | "arrivalTime" | "serviceNumber"> & {
+export type TripCard = CardLocation & Pick<Card, "tripId" | "type" | "locationCategory" | "coverAttachmentId" | "transportMode" | "startLocation" | "endLocation" | "departureTime" | "arrivalTime" | "serviceNumber"> & {
   id: string;
   tripDayId: string;
   title: string;
   description: string;
   attachments: CardAttachment[];
+  cityLocations: CityCardLocation[];
 };
 
 export type TripColumn = {

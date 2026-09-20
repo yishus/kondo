@@ -13,6 +13,20 @@ async function createTrip(page: Page) {
 
 test("search, attach, replace, cancel, and remove a card's Google Maps location", async ({ page }) => {
   const queries: string[] = [];
+  let photoRequests = 0;
+  await page.route("**/trips/*/cards/*/place-photo", async (route) => {
+    photoRequests += 1;
+    await route.fulfill({ json: { error: null, photo: {
+      imageUrl: "https://images.example.test/place-cover.jpg",
+      googleMapsUri: "https://www.google.com/maps/place/source-photo",
+    } } });
+  });
+  await page.route("https://images.example.test/place-cover.jpg", async (route) => {
+    await route.fulfill({
+      contentType: "image/jpeg",
+      body: Buffer.from([255, 216, 255, 224, 0, 16, 255, 217]),
+    });
+  });
   await page.route("**/trips/*/places?*", async (route) => {
     const query = new URL(route.request().url()).searchParams.get("q")!;
     queries.push(query);
@@ -32,6 +46,9 @@ test("search, attach, replace, cancel, and remove a card's Google Maps location"
   await expect(column.locator(".trip-card-title")).toHaveCount(0);
   await dialog.getByRole("button", { name: "Add card", exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(column.getByRole("img", { name: "Afternoon visit from Google Maps", exact: true })).toBeVisible();
+  await expect(column.getByRole("link", { name: "Open the source photo for Afternoon visit on Google Maps", exact: true })).toHaveAttribute("href", "https://www.google.com/maps/place/source-photo");
+  expect(photoRequests).toBe(1);
   await page.reload();
   const link = column.getByRole("link", { name: "View Afternoon visit on Google Maps" });
   await expect(link).toHaveAttribute("href", /query_place_id=ChIJ_museum/);

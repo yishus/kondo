@@ -2,7 +2,8 @@
 # Copy this file to .dev.vars and set your server-side API key.
 GOOGLE_MAPS_API_KEY=""
 
-# Local browser key for Maps JavaScript API map rendering.
+# Local browser key for Maps JavaScript API map rendering and client-side Place details.
+# Enable Maps JavaScript API and Places API (New) for this key.
 # A Maps Demo Key is suitable for local development; do not use it in production.
 GOOGLE_MAPS_BROWSER_API_KEY=""
 
