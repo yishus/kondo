@@ -1,0 +1,20 @@
+# Enable Places API (New) in your Google Maps Platform project.
+# Copy this file to .dev.vars and set your server-side API key.
+GOOGLE_MAPS_API_KEY=""
+
+# Local browser key for Maps JavaScript API map rendering.
+# A Maps Demo Key is suitable for local development; do not use it in production.
+GOOGLE_MAPS_BROWSER_API_KEY=""
+
+# Generate with: openssl rand -base64 32
+BETTER_AUTH_SECRET=""
+# Optional in local development. Set this to the public application origin in production.
+BETTER_AUTH_URL="http://localhost:5173"
+
+# Comma-separated email addresses that may create an account. The example test
+# accounts keep the local Playwright suite repeatable; replace them in production.
+CLOSED_BETA_EMAILS="you@example.com,browser-test@example.com,owner@example.com,coowner@example.com"
+
+# Cloudflare's always-pass Turnstile test keys for local development only.
+TURNSTILE_SITE_KEY="1x00000000000000000000AA"
+TURNSTILE_SECRET_KEY="1x0000000000000000000000000000000AA"

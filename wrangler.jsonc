@@ -10,9 +10,19 @@
 	"vars": {
 		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
 	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "kondo-db",
+			"database_id": "ad76d5f9-faa7-4ffd-b0df-8e0ccfc03522"
+		}
+	],
 	"observability": {
 		"enabled": true
 	},
+	"r2_buckets": [
+		{ "binding": "ATTACHMENTS", "bucket_name": "kondo-attachments", "remote": false }
+	],
 	"upload_source_maps": true
 	/**
 	 * Smart Placement
