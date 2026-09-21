@@ -6,7 +6,7 @@ import type { CityCardLocation } from "../db/schema";
 
 function PlaceAttributions({ place }: { place: PlaceSearchResult }) {
   return place.attributions.map((attribution, index) => (
-    <p key={index} className="px-3 pb-2 text-xs text-[#626f86]">
+    <p key={index} className="px-3 pb-2 text-xs text-muted-foreground">
       {attribution.uri
         ? <a href={attribution.uri} target="_blank" rel="noopener noreferrer" className="underline">{attribution.provider}</a>
         : attribution.provider}
@@ -97,23 +97,23 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
 
   return (
     <fieldset className="grid min-w-0 gap-3" disabled={disabled}>
-      <legend className="mb-1 text-sm font-bold">Locations in this area <span className="font-normal text-[#626f86]">(optional)</span></legend>
+      <legend className="mb-1 text-sm font-semibold">Locations in this area <span className="font-normal text-muted-foreground">(optional)</span></legend>
       <input type="hidden" name="cityLocations" value={JSON.stringify(items)} />
 
       {items.length > 0 && (
         <ol className="grid gap-2" aria-label="Locations added to this area">
           {items.map((item, index) => (
-            <li key={item.googlePlaceId} className="rounded-[10px] border border-[#dcdfe4] bg-[#f7f8f9] p-3">
+            <li key={item.googlePlaceId} className="rounded-[10px] border border-border bg-background p-3">
               <div className="flex items-start gap-3">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#dfe7f5] text-xs font-bold text-[#44546f]">{index + 1}</span>
+                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-secondary-foreground">{index + 1}</span>
                 <div className="min-w-0 flex-1">
-                  <a className="text-sm font-semibold break-words text-[#0c66e4] hover:underline" href={googleMapsUrl(item.googlePlaceId, item.googleMapsQuery)} target="_blank" rel="noopener noreferrer">
+                  <a className="text-sm font-semibold break-words text-primary hover:underline" href={googleMapsUrl(item.googlePlaceId, item.googleMapsQuery)} target="_blank" rel="noopener noreferrer">
                     {item.googleMapsQuery} <span aria-hidden="true">↗</span>
                   </a>
-                  <label className="mt-2 grid gap-1 text-xs font-semibold text-[#44546f]">
+                  <label className="mt-2 grid gap-1 text-xs font-semibold text-secondary-foreground">
                     Location type
                     <input
-                      className="min-w-0 rounded-lg border border-[#b6beca] bg-white px-2.5 py-2 text-sm font-normal outline-none focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20"
+                      className="min-w-0 rounded-lg border border-input bg-surface px-2.5 py-2 text-sm font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                       list={`${id}-types`}
                       maxLength={50}
                       required
@@ -122,7 +122,7 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
                     />
                   </label>
                 </div>
-                <button type="button" className="shrink-0 cursor-pointer rounded-lg px-2 py-1 text-xs font-semibold text-[#ae2a19] hover:bg-[#ffebe6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ae2a19]" onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                <button type="button" className="shrink-0 cursor-pointer rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive" onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
                   Remove
                 </button>
               </div>
@@ -135,12 +135,12 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
         {typeSuggestions.map((type) => <option key={type} value={type} />)}
       </datalist>
 
-      <div className="rounded-[10px] border border-[#dcdfe4] p-3">
+      <div className="rounded-[10px] border border-border p-3">
         <p className="mb-3 text-sm font-semibold">Add a Google Maps place</p>
-        <label className="grid gap-1 text-xs font-semibold text-[#44546f]">
+        <label className="grid gap-1 text-xs font-semibold text-secondary-foreground">
           Location type
           <input
-            className="min-w-0 rounded-[10px] border border-[#b6beca] px-3 py-2.5 text-sm font-normal outline-none focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20"
+            className="min-w-0 rounded-[10px] border border-input px-3 py-2.5 text-sm font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             list={`${id}-types`}
             maxLength={50}
             placeholder="Choose or enter your own type"
@@ -157,7 +157,7 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
               value={query}
               maxLength={200}
               autoComplete="off"
-              className="w-full min-w-0 rounded-[10px] border border-[#b6beca] px-3 py-2.5 text-sm outline-none focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20"
+              className="w-full min-w-0 rounded-[10px] border border-input px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
               placeholder="e.g. Ghibli Museum, Tokyo"
               onChange={(event) => { clearResults(); setQuery(event.target.value); }}
               onKeyDown={(event) => {
@@ -168,29 +168,29 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
               }}
             />
           </label>
-          <button type="button" className="cursor-pointer rounded-[10px] bg-[#e9f2ff] px-3 py-2.5 text-sm font-semibold text-[#0c66e4] hover:bg-[#dbe9fc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] disabled:cursor-not-allowed disabled:opacity-50" disabled={searching || query.trim().length < 2 || !locationType.trim() || items.length >= MAX_CITY_LOCATIONS} onClick={() => void search()}>
+          <button type="button" className="cursor-pointer rounded-[10px] bg-accent px-3 py-2.5 text-sm font-semibold text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50" disabled={searching || query.trim().length < 2 || !locationType.trim() || items.length >= MAX_CITY_LOCATIONS} onClick={() => void search()}>
             {searching ? "Searching…" : "Search"}
           </button>
         </div>
-        <p className="mt-2 text-xs text-[#626f86]">Start with Restaurants, Coffee, or Interest—or type any category you need.</p>
-        <div role="status" className="mt-2 text-xs text-[#626f86]">
+        <p className="mt-2 text-xs text-muted-foreground">Start with Restaurants, Coffee, or Interest—or type any category you need.</p>
+        <div role="status" className="mt-2 text-xs text-muted-foreground">
           {searching ? "Searching Google Maps…" : results ? results.length ? `${results.length} places found.` : "No places found. Try a different name or include the city." : ""}
         </div>
-        {error && <p role="alert" className="mt-2 text-sm text-[#ae2a19]">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
         {results && results.length > 0 && (
-          <div className="mt-2 rounded-[10px] border border-[#dcdfe4] bg-[#f7f8f9] p-2">
+          <div className="mt-2 rounded-[10px] border border-border bg-background p-2">
             <ul aria-label="Area location search results" className="max-h-52 overflow-y-auto">
               {results.map((place) => (
-                <li key={place.id} className="border-b border-[#dcdfe4] last:border-b-0">
-                  <button type="button" className="w-full cursor-pointer rounded-[10px] px-3 py-2.5 text-left text-sm font-semibold hover:bg-[#dcdfe4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]" onClick={() => addPlace(place)}>
+                <li key={place.id} className="border-b border-border last:border-b-0">
+                  <button type="button" className="w-full cursor-pointer rounded-[10px] px-3 py-2.5 text-left text-sm font-semibold hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" onClick={() => addPlace(place)}>
                     <span className="block break-words">{place.name}</span>
-                    <span className="mt-0.5 block text-xs font-normal break-words text-[#626f86]">{place.address}</span>
+                    <span className="mt-0.5 block text-xs font-normal break-words text-muted-foreground">{place.address}</span>
                   </button>
                   <PlaceAttributions place={place} />
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-xs font-normal whitespace-nowrap text-[#5e5e5e]" translate="no">Google Maps</p>
+            <p className="mt-2 text-xs font-normal whitespace-nowrap text-muted-foreground" translate="no">Google Maps</p>
           </div>
         )}
       </div>

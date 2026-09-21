@@ -52,7 +52,7 @@ function GooglePlaceCover({ card }: { card: TripCard }) {
           href={photo.googleMapsUri}
           target="_blank"
           rel="noopener noreferrer"
-          className="group relative block overflow-hidden rounded-tr-[9px] bg-[#ebecf0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]"
+          className="group relative block overflow-hidden rounded-tr-[9px] bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           aria-label={`Open the source photo for ${card.title} on Google Maps`}
         >
           <img src={photo.imageUrl} alt={`${card.title} from Google Maps`} className={coverClassName()} loading="lazy" onError={() => setPhoto(null)} />
@@ -71,7 +71,7 @@ export function CardCover({ card }: { card: TripCard }) {
   if (uploadedCover) {
     const url = attachmentUrl(card.tripId, card.id, uploadedCover.id);
     return (
-      <a href={url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-tr-[9px] bg-[#ebecf0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]" aria-label={`Open cover image for ${card.title}`}>
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-tr-[9px] bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" aria-label={`Open cover image for ${card.title}`}>
         <img src={url} alt={`${card.title} cover`} className={coverClassName()} loading="lazy" />
       </a>
     );

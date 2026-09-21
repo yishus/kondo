@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { asc, eq, max, min } from "drizzle-orm";
-import { data, Form, Link, redirect } from "react-router";
+import { data, Form, Link, redirect, useNavigation } from "react-router";
 import { v7 as uuidv7 } from "uuid";
 
 import type { Route } from "./+types/home";
@@ -8,6 +8,8 @@ import { requireUser } from "../auth.server";
 import { getDb } from "../db.server";
 import { tripDays, tripOwners, trips } from "../db/schema";
 import { formatTripDates, getTripPeriod, type TripPeriod } from "../trip-dates";
+import { AppShell } from "../components/app-shell";
+import { Icon } from "../components/icon";
 
 function formString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -82,6 +84,8 @@ export function meta() {
 }
 
 export default function Home({ actionData, loaderData }: Route.ComponentProps) {
+  const navigation = useNavigation();
+  const busy = navigation.state !== "idle";
   const tripsByPeriod: Record<TripPeriod, (typeof loaderData.trips)[number][]> = {
     current: [],
     upcoming: [],
@@ -97,36 +101,27 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
   ];
 
   return (
-    <main className="min-h-screen bg-[#f4f6f8] px-[clamp(20px,5vw,72px)] py-14 font-sans text-[#172b4d] max-[760px]:pt-9">
-      <div className="mx-auto max-w-5xl">
-        <header className="mb-10">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs font-bold tracking-[0.12em] text-[#0c66e4] uppercase">Trip planner</p>
-            <div className="flex items-center gap-3 text-sm text-[#626f86]">
-              <span>{loaderData.currentUser.name}</span>
-              <Form action="/sign-out" method="post">
-                <button className="font-bold text-[#0c66e4] hover:text-[#0055cc]" type="submit">Sign out</button>
-              </Form>
-            </div>
+    <AppShell user={loaderData.currentUser}>
+      <div className="mx-auto max-w-6xl">
+        <header className="page-heading">
+          <div>
+            <span className="eyebrow">A world of possibility</span>
+            <h1>Your trips</h1>
+            <p className="page-description">Pick up where you left off or start planning somewhere new.</p>
           </div>
-          <h1 className="text-[clamp(2rem,4vw,3.25rem)] font-bold tracking-[-0.04em]">
-            Your trips
-          </h1>
-          <p className="mt-2.5 text-[#626f86]">
-            Pick up where you left off or start planning somewhere new.
-          </p>
+          <span className="trip-count"><Icon name="trips" width="15" height="15" />{loaderData.trips.length} {loaderData.trips.length === 1 ? "trip" : "trips"}</span>
         </header>
 
         <Form
-          className="mb-10 rounded-2xl border border-[#dcdfe4] bg-white p-5 shadow-[0_1px_2px_rgb(9_30_66_/_10%)]"
+          className="new-trip-panel"
           method="post"
         >
-          <label className="mb-2 block text-sm font-bold" htmlFor="trip-title">
-            Add a new trip
+          <label className="new-trip-title" htmlFor="trip-title">
+            <Icon name="plus" />Add a new trip
           </label>
           <div className="flex gap-2.5 max-[600px]:flex-col">
             <input
-              className="h-11 min-w-0 flex-1 rounded-[10px] border border-[#b6beca] bg-white px-3 text-sm outline-none transition focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20 aria-invalid:border-[#ae2a19]"
+              className="h-11 min-w-0 flex-1 rounded-[10px] border border-input bg-surface px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 aria-invalid:border-destructive"
               id="trip-title"
               name="title"
               type="text"
@@ -135,17 +130,19 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
               aria-describedby={actionData?.error ? "trip-title-error" : undefined}
               aria-invalid={Boolean(actionData?.error)}
               required
+              disabled={busy}
             />
             <button
-              className="h-11 rounded-[10px] bg-[#0c66e4] px-5 text-sm font-bold text-white transition hover:bg-[#0055cc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]"
+              className="h-11 rounded-[10px] bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               type="submit"
+              disabled={busy}
             >
-              Add trip
+              {busy ? "Creating…" : "Add trip"}
             </button>
           </div>
           {actionData?.error && (
             <p
-              className="mt-2 text-sm font-medium text-[#ae2a19]"
+              className="mt-2 text-sm font-medium text-destructive"
               id="trip-title-error"
             >
               {actionData.error}
@@ -154,9 +151,10 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
         </Form>
 
         {loaderData.trips.length === 0 ? (
-          <section className="rounded-2xl border border-dashed border-[#b6beca] bg-white/60 px-6 py-12 text-center">
-            <h2 className="text-lg font-bold">No trips yet</h2>
-            <p className="mt-1.5 text-sm text-[#626f86]">
+          <section className="empty-state py-16 text-center">
+            <span className="mx-auto mb-5 grid size-12 place-items-center rounded-xl bg-accent text-accent-foreground"><Icon name="compass" width="25" height="25" /></span>
+            <h2 className="text-lg font-semibold">No trips yet</h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">
               Add a title above to create your first trip.
             </p>
           </section>
@@ -167,33 +165,35 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
 
               return (
                 <section key={section.id} aria-labelledby={`${section.id}-trips-heading`}>
-                  <div className="mb-4 flex items-center gap-2.5">
-                    <h2 className="text-xl font-bold tracking-[-0.02em]" id={`${section.id}-trips-heading`}>
+                  <div className="trip-section-heading">
+                    <h2 id={`${section.id}-trips-heading`}>
                       {section.title}
                     </h2>
-                    <span className="rounded-full bg-[#dcdfe4] px-2 py-0.5 text-xs font-bold text-[#44546f]">
+                    <span className="count-badge">
                       {sectionTrips.length}
                     </span>
                   </div>
                   {sectionTrips.length === 0 ? (
-                    <p className="rounded-2xl border border-dashed border-[#b6beca] bg-white/60 px-5 py-7 text-sm text-[#626f86]">
+                    <p className="empty-state">
                       {section.emptyMessage}
                     </p>
                   ) : (
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))] gap-4">
                       {sectionTrips.map((trip) => (
                         <Link
-                          className="group rounded-2xl border border-[#dcdfe4] bg-white p-5 shadow-[0_1px_2px_rgb(9_30_66_/_10%)] transition hover:-translate-y-0.5 hover:border-[#b6beca] hover:shadow-[0_5px_12px_rgb(9_30_66_/_12%)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]"
+                          className="trip-preview group"
                           key={trip.id}
                           to={`/trips/${trip.id}`}
                         >
-                          <h3 className="font-bold tracking-[-0.01em] group-hover:text-[#0c66e4]">
+                          <div className="trip-preview-top"><span className="trip-preview-icon"><Icon name="compass" /></span><Icon name="arrow" className="text-muted-foreground transition group-hover:text-primary" width="17" height="17" /></div>
+                          <h3>
                             {trip.title}
                           </h3>
-                          <p className="mt-2 text-sm text-[#626f86]">
+                          <p className="trip-preview-date">
+                            <Icon name="calendar" width="14" height="14" />
                             {formatTripDates(trip.start, trip.end)}
                           </p>
-                          {trip.description && <p className="mt-2 text-sm text-[#626f86]">{trip.description}</p>}
+                          {trip.description && <p className="mt-2 text-sm text-muted-foreground">{trip.description}</p>}
                         </Link>
                       ))}
                     </div>
@@ -204,6 +204,6 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
           </div>
         )}
       </div>
-    </main>
+    </AppShell>
   );
 }

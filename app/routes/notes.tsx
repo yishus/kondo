@@ -58,29 +58,29 @@ export async function action({ params, request }: Route.ActionArgs) {
 
 export function meta() { return [{ title: "Notes · Kondo" }]; }
 
-const input = "min-w-0 w-full rounded-[10px] border border-[#b6beca] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20 disabled:opacity-50";
-const button = "cursor-pointer rounded-[10px] px-4 py-2.5 text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] disabled:cursor-wait disabled:opacity-50";
-const primary = `${button} bg-[#0c66e4] text-white hover:bg-[#0055cc]`;
-const panel = "min-w-0 rounded-2xl border border-[#dcdfe4] bg-white p-5 sm:p-6";
+const input = "min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50";
+const button = "cursor-pointer rounded-[10px] px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-wait disabled:opacity-50";
+const primary = `${button} bg-primary text-primary-foreground hover:bg-primary-hover`;
+const panel = "min-w-0 rounded-2xl border border-border bg-surface p-5 sm:p-6";
 
 function TodoItem({ todo }: { todo: Route.ComponentProps["loaderData"]["todos"][number] }) {
   const fetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
   const completed = busy && fetcher.formData?.get("intent") === "toggle-todo"
     ? fetcher.formData.get("completed") === "true" : todo.completed;
-  return <li className="rounded-xl border border-[#dcdfe4] bg-[#f7f8f9] p-3">
+  return <li className="rounded-xl border border-border bg-background p-3">
     <div className="flex items-start gap-2">
       <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 py-2">
-        <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#0c66e4]" checked={completed} disabled={busy} onChange={(event) => fetcher.submit({ intent: "toggle-todo", todoId: todo.id, completed: String(event.target.checked) }, { method: "post", flushSync: true })} />
-        <span className={`min-w-0 text-sm break-words ${completed ? "text-[#626f86] line-through" : "text-[#172b4d]"}`}>{todo.title}</span>
+        <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-primary" checked={completed} disabled={busy} onChange={(event) => fetcher.submit({ intent: "toggle-todo", todoId: todo.id, completed: String(event.target.checked) }, { method: "post", flushSync: true })} />
+        <span className={`min-w-0 text-sm break-words ${completed ? "text-muted-foreground line-through" : "text-foreground"}`}>{todo.title}</span>
       </label>
       <fetcher.Form method="post">
         <input type="hidden" name="intent" value="delete-todo" />
         <input type="hidden" name="todoId" value={todo.id} />
-        <button type="submit" disabled={busy} aria-label={`Delete ${todo.title}`} className={`${button} px-2 text-[#ae2a19] hover:bg-[#ffebe6]`}>Delete</button>
+        <button type="submit" disabled={busy} aria-label={`Delete ${todo.title}`} className={`${button} px-2 text-destructive hover:bg-destructive-soft`}>Delete</button>
       </fetcher.Form>
     </div>
-    {fetcher.data?.error && <p role="alert" className="mt-2 text-sm text-[#ae2a19]">{fetcher.data.error}</p>}
+    {fetcher.data?.error && <p role="alert" className="mt-2 text-sm text-destructive">{fetcher.data.error}</p>}
   </li>;
 }
 
@@ -89,15 +89,15 @@ function NotesEditor({ notes }: { notes: string }) {
   const [draft, setDraft] = useState(notes);
   const busy = fetcher.state !== "idle";
   return <section className={panel} aria-labelledby="notes-heading">
-    <h2 id="notes-heading" className="text-xl font-bold">Trip notes</h2>
-    <p className="mt-2 text-sm text-[#626f86]">Keep ideas, reminders, and useful details together.</p>
+    <h2 id="notes-heading" className="text-xl font-semibold">Trip notes</h2>
+    <p className="mt-2 text-sm text-muted-foreground">Keep ideas, reminders, and useful details together.</p>
     <fetcher.Form method="post" className="mt-5 grid gap-3">
       <input type="hidden" name="intent" value="save-notes" />
-      <label htmlFor="trip-notes" className="text-sm font-bold">Notes</label>
+      <label htmlFor="trip-notes" className="text-sm font-semibold">Notes</label>
       <textarea id="trip-notes" name="notes" className={`${input} min-h-80 resize-y leading-relaxed`} value={draft} onChange={(event) => setDraft(event.target.value)} disabled={busy} maxLength={50000} placeholder="Packing ideas, places to explore, things to remember…" />
-      {fetcher.data?.error && <p role="alert" className="text-sm text-[#ae2a19]">{fetcher.data.error}</p>}
+      {fetcher.data?.error && <p role="alert" className="text-sm text-destructive">{fetcher.data.error}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p role="status" className="text-sm text-[#626f86]">{busy ? "Saving…" : draft !== notes ? "Unsaved changes" : fetcher.data?.ok ? "Notes saved." : ""}</p>
+        <p role="status" className="text-sm text-muted-foreground">{busy ? "Saving…" : draft !== notes ? "Unsaved changes" : fetcher.data?.ok ? "Notes saved." : ""}</p>
         <button className={primary} type="submit" disabled={busy || draft === notes}>{busy ? "Saving…" : "Save notes"}</button>
       </div>
     </fetcher.Form>
@@ -116,15 +116,15 @@ export default function Notes({ loaderData: { tripId, notes, todos } }: Route.Co
   }, [fetcher.state, fetcher.data]);
   return <div className="grid items-start gap-6 lg:grid-cols-2">
     <section className={panel} aria-labelledby="todos-heading">
-      <h2 id="todos-heading" className="text-xl font-bold">To-do list</h2>
-      <p className="mt-2 text-sm text-[#626f86]">{todos.length ? `${todos.filter((todo) => todo.completed).length} of ${todos.length} completed` : "A few small steps toward your next trip."}</p>
+      <h2 id="todos-heading" className="text-xl font-semibold">To-do list</h2>
+      <p className="mt-2 text-sm text-muted-foreground">{todos.length ? `${todos.filter((todo) => todo.completed).length} of ${todos.length} completed` : "A few small steps toward your next trip."}</p>
       <fetcher.Form ref={form} method="post" className="mt-5 flex flex-wrap items-end gap-2" onSubmit={() => { submitted.current = true; }}>
         <input type="hidden" name="intent" value="add-todo" />
-        <label className="grid min-w-0 flex-1 basis-48 gap-1.5 text-sm font-bold">New to-do<input className={input} name="title" required maxLength={500} disabled={fetcher.state !== "idle"} placeholder="e.g. Check passport expiry" /></label>
+        <label className="grid min-w-0 flex-1 basis-48 gap-1.5 text-sm font-semibold">New to-do<input className={input} name="title" required maxLength={500} disabled={fetcher.state !== "idle"} placeholder="e.g. Check passport expiry" /></label>
         <button type="submit" className={primary} disabled={fetcher.state !== "idle"}>{fetcher.state === "idle" ? "Add to-do" : "Adding…"}</button>
       </fetcher.Form>
-      {fetcher.data?.error && <p role="alert" className="mt-3 text-sm text-[#ae2a19]">{fetcher.data.error}</p>}
-      {todos.length ? <ul className="mt-5 grid gap-3">{todos.map((todo) => <TodoItem key={todo.id} todo={todo} />)}</ul> : <p className="mt-5 rounded-xl border border-dashed border-[#b6beca] p-6 text-sm text-[#626f86]">No to-dos yet. Add your first task above.</p>}
+      {fetcher.data?.error && <p role="alert" className="mt-3 text-sm text-destructive">{fetcher.data.error}</p>}
+      {todos.length ? <ul className="mt-5 grid gap-3">{todos.map((todo) => <TodoItem key={todo.id} todo={todo} />)}</ul> : <p className="mt-5 rounded-xl border border-dashed border-input p-6 text-sm text-muted-foreground">No to-dos yet. Add your first task above.</p>}
     </section>
     <NotesEditor key={tripId} notes={notes} />
   </div>;

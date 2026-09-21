@@ -9,6 +9,7 @@ import { googleMapsUrl } from "../card-location";
 import type { CardDestination, CardMove, TripCard } from "../card-order";
 import { cardTypes, locationCategories, transportModes } from "../card-types";
 import { CardCover } from "./card-cover";
+import { Icon } from "./icon";
 
 // Pointer drops must actually be inside a target. Keyboard movement snaps to
 // measured targets, including empty days.
@@ -93,7 +94,7 @@ export function CardDragBoard({ children, onMove }: {
     >
       {children}
       <DragOverlay dropAnimation={null}>
-        {draggedCard && <div className="trip-card trip-card-overlay flex min-w-0 items-stretch rounded-[10px] border border-[#dcdfe4] bg-white text-[0.9rem] leading-[1.45] text-[#172b4d] hover:border-[#b6beca] cursor-grabbing px-4 py-3.5 wrap-anywhere shadow-[0_8px_24px_rgb(9_30_66_/_25%)]">{draggedCard.title}</div>}
+        {draggedCard && <div className="trip-card trip-card-overlay flex min-w-0 items-stretch rounded-[10px] border border-border bg-surface text-[0.9rem] leading-[1.45] text-foreground hover:border-input cursor-grabbing px-4 py-3.5 wrap-anywhere shadow-[0_8px_24px_rgb(9_30_66_/_25%)]">{draggedCard.title}</div>}
       </DragOverlay>
     </DndContext>
   );
@@ -112,7 +113,7 @@ export function CardDropSlot({ destination, label, disabled, children }: {
   });
   return (
     <div ref={setNodeRef} className="card-drop-slot relative min-w-0 pt-2.5" data-over={isOver || undefined}>
-      {isOver && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[3px] h-[3px] rounded-[2px] bg-[#0c66e4]" />}
+      {isOver && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[3px] h-[3px] rounded-[2px] bg-primary" />}
       {children}
     </div>
   );
@@ -127,11 +128,11 @@ export function DraggableCard({ card, disabled, onOpen }: {
     id: card.id, data: { card }, disabled,
   });
   return (
-    <div ref={setNodeRef} className="trip-card flex min-w-0 items-stretch rounded-[10px] border border-[#dcdfe4] bg-white text-[0.9rem] leading-[1.45] text-[#172b4d] hover:border-[#b6beca] shadow-[0_1px_2px_rgb(9_30_66_/_12%)] data-[dragging]:opacity-30 data-[card-type=city]:border-l-[3px] data-[card-type=city]:border-l-[#4b9270] data-[card-type=city]:bg-[#e5f2ec] data-[card-type=transport]:border-l-[3px] data-[card-type=transport]:border-l-[#6088c5] data-[card-type=transport]:bg-[#eaf1fc]" data-card-type={card.type} data-dragging={isDragging || undefined}>
+    <div ref={setNodeRef} className="trip-card flex min-w-0 items-stretch rounded-[9px] border border-border bg-surface text-[0.9rem] leading-[1.45] text-foreground transition-colors hover:border-input data-[dragging]:opacity-30" data-card-type={card.type} data-dragging={isDragging || undefined}>
       <button
         ref={setActivatorNodeRef}
         type="button"
-        className="grid w-8 shrink-0 cursor-grab touch-none place-items-center rounded-l-[9px] text-[#8590a2] hover:bg-[#f1f2f4] hover:text-[#44546f] active:cursor-grabbing disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]"
+        className="grid w-8 shrink-0 cursor-grab touch-none place-items-center rounded-l-[9px] text-muted-foreground hover:bg-muted hover:text-secondary-foreground active:cursor-grabbing disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         {...attributes}
         {...listeners}
         disabled={disabled}
@@ -145,28 +146,29 @@ export function DraggableCard({ card, disabled, onOpen }: {
       </button>
       <div className="flex min-w-0 flex-1 flex-col">
         <CardCover card={card} />
-        <span className="mt-3 text-[10px] font-bold uppercase tracking-wide text-[#626f86]">
+        <span className="card-type-label">
+          <Icon name={card.type === "transport" ? "plane" : card.type === "city" ? "compass" : "pin"} width="11" height="11" />
           {card.type === "transport"
             ? transportModes[card.transportMode as keyof typeof transportModes] ?? "Transport"
             : card.type === "location" && card.locationCategory
               ? `${cardTypes.location} · ${locationCategories[card.locationCategory]}`
               : cardTypes[card.type]}
         </span>
-        <button type="button" className={`trip-card-title min-w-0 flex-1 cursor-pointer rounded-r-[9px] pt-1 pr-3 text-left wrap-anywhere disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] ${card.type === "city" ? "pb-1" : "pb-3"}`} aria-haspopup="dialog" onClick={onOpen} disabled={disabled}>
+        <button type="button" className={`trip-card-title min-w-0 flex-1 cursor-pointer rounded-r-[9px] pt-1 pr-3 text-left wrap-anywhere disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${card.type === "city" ? "pb-1" : "pb-3"}`} aria-haspopup="dialog" onClick={onOpen} disabled={disabled}>
           {card.title}
         </button>
         {card.type === "city" && (
-          <span className="mb-3 text-xs text-[#626f86]">
+          <span className="mb-3 text-xs text-muted-foreground">
             {card.cityLocations.length} {card.cityLocations.length === 1 ? "location" : "locations"}
           </span>
         )}
         {card.type === "transport" && (card.departureTime || card.arrivalTime || card.serviceNumber) && (
-          <span className="mb-2 text-xs text-[#626f86]">{[card.departureTime && `Dep. ${card.departureTime}`, card.arrivalTime && `Arr. ${card.arrivalTime}`, card.serviceNumber].filter(Boolean).join(" · ")}</span>
+          <span className="mb-2 text-xs text-muted-foreground">{[card.departureTime && `Dep. ${card.departureTime}`, card.arrivalTime && `Arr. ${card.arrivalTime}`, card.serviceNumber].filter(Boolean).join(" · ")}</span>
         )}
-        {card.attachments.length > 0 && <span className="mb-2 text-xs text-[#626f86]">📎 {card.attachments.length} {card.attachments.length === 1 ? "attachment" : "attachments"}</span>}
+        {card.attachments.length > 0 && <span className="mb-2 text-xs text-muted-foreground">📎 {card.attachments.length} {card.attachments.length === 1 ? "attachment" : "attachments"}</span>}
         {card.googlePlaceId && (
           <a href={googleMapsUrl(card.googlePlaceId, card.googleMapsQuery ?? card.title)} target="_blank" rel="noopener noreferrer"
-            className="mb-3 mr-3 w-fit rounded text-xs font-semibold text-[#0c66e4] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]"
+            className="mb-3 mr-3 w-fit rounded text-xs font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             aria-label={`View ${card.title} on Google Maps`}>
             View on Google Maps <span aria-hidden="true">↗</span>
           </a>

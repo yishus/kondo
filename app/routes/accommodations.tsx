@@ -26,11 +26,11 @@ export function meta() { return [{ title: "Accommodations · Kondo" }]; }
 
 type Candidate = Accommodation & { document: AccommodationDocument | null };
 type Place = Route.ComponentProps["loaderData"]["places"][number];
-const input = "min-w-0 w-full rounded-[10px] border border-[#b6beca] bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20";
-const button = "cursor-pointer rounded-[10px] px-4 py-2.5 text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] disabled:cursor-wait disabled:opacity-50";
-const primary = `${button} bg-[#0c66e4] text-white hover:bg-[#0055cc]`;
-const secondary = `${button} text-[#0c66e4] hover:bg-[#e9f2ff]`;
-const label = "grid min-w-0 gap-1.5 text-sm font-bold";
+const input = "min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 text-sm font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20";
+const button = "cursor-pointer rounded-[10px] px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-wait disabled:opacity-50";
+const primary = `${button} bg-primary text-primary-foreground hover:bg-primary-hover`;
+const secondary = `${button} text-primary hover:bg-accent`;
+const label = "grid min-w-0 gap-1.5 text-sm font-semibold";
 const documentUrl = (tripId: string, doc: AccommodationDocument) => `/trips/${encodeURIComponent(tripId)}/accommodations/${encodeURIComponent(doc.accommodationId)}/documents/${encodeURIComponent(doc.id)}`;
 const dateLabel = (date: string) => new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
 
@@ -59,9 +59,9 @@ function CandidateEditor({ tripId, place, candidate, onClose }: { tripId: string
   function changeOption(id: string, field: keyof StayOption, value: string) {
     setOptions((current) => current.map((option) => option.id === id ? { ...option, [field]: value } : option));
   }
-  return <dialog ref={dialog} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} aria-labelledby="accommodation-heading" className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 text-[#172b4d] shadow-xl backdrop:bg-[#091e42]/60">
+  return <dialog ref={dialog} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} aria-labelledby="accommodation-heading" className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-2xl bg-surface p-6 text-foreground shadow-xl backdrop:bg-overlay/60">
     <div className="mb-5 flex items-start justify-between gap-4">
-      <div><p className="mb-1 text-sm text-[#626f86]">{place.name}</p><h2 id="accommodation-heading" className="text-xl font-bold">{candidate ? "Accommodation details" : "Add accommodation"}</h2></div>
+      <div><p className="mb-1 text-sm text-muted-foreground">{place.name}</p><h2 id="accommodation-heading" className="text-xl font-semibold">{candidate ? "Accommodation details" : "Add accommodation"}</h2></div>
       <button type="button" aria-label="Close accommodation" disabled={busy} className={secondary} onClick={onClose}>×</button>
     </div>
     <fetcher.Form method="post" encType="multipart/form-data" className="grid gap-5" onSubmit={() => { submitted.current = true; }}>
@@ -76,15 +76,15 @@ function CandidateEditor({ tripId, place, candidate, onClose }: { tripId: string
           <label className={label}>Type<select className={input} name="kind" defaultValue={candidate?.kind ?? "hotel"}><option value="hotel">Hotel</option><option value="airbnb">Airbnb</option></select></label>
         </div>
         <CardLocationPicker tripId={tripId} location={location} onChange={setLocation} disabled={busy} />
-        <section className="grid gap-3 border-t border-[#dcdfe4] pt-5" aria-label="Date and price options">
-          <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="font-bold">Dates & prices</h3><p className="mt-1 text-sm text-[#626f86]">Compare total prices, including taxes and fees.</p></div>
+        <section className="grid gap-3 border-t border-border pt-5" aria-label="Date and price options">
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="font-semibold">Dates & prices</h3><p className="mt-1 text-sm text-muted-foreground">Compare total prices, including taxes and fees.</p></div>
             <label className={`${label} w-28`}>Currency<select name="currency" className={input} value={currency} onChange={(event) => setCurrency(event.target.value)}>{currencies.map((code) => <option key={code}>{code}</option>)}</select></label>
           </div>
-          {!options.length && <p className="rounded-xl bg-[#f4f6f8] p-4 text-sm text-[#626f86]">Add a date option when you have a quote.</p>}
+          {!options.length && <p className="rounded-xl bg-background p-4 text-sm text-muted-foreground">Add a date option when you have a quote.</p>}
           {options.map((option, index) => {
             const nights = stayNights(option.checkIn, option.checkOut);
-            return <fieldset key={option.id} className={`min-w-0 rounded-xl border p-4 ${confirmed === option.id ? "border-[#4bce97] bg-[#effaf4]" : "border-[#dcdfe4] bg-[#f7f8f9]"}`}>
-              <legend className="px-1 text-sm font-bold">Option {index + 1}{confirmed === option.id ? " · Confirmed stay" : ""}</legend>
+            return <fieldset key={option.id} className={`min-w-0 rounded-xl border p-4 ${confirmed === option.id ? "border-success-border bg-success-soft" : "border-border bg-background"}`}>
+              <legend className="px-1 text-sm font-semibold">Option {index + 1}{confirmed === option.id ? " · Confirmed stay" : ""}</legend>
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className={label}>Check-in<input className={input} type="date" required value={option.checkIn} onChange={(event) => changeOption(option.id, "checkIn", event.target.value)} /></label>
                 <label className={label}>Check-out<input className={input} type="date" required min={option.checkIn || undefined} value={option.checkOut} onChange={(event) => changeOption(option.id, "checkOut", event.target.value)} /></label>
@@ -92,7 +92,7 @@ function CandidateEditor({ tripId, place, candidate, onClose }: { tripId: string
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm" aria-live="polite">{nights && option.totalCost !== "" && Number.isFinite(Number(option.totalCost)) ? `${nights} ${nights === 1 ? "night" : "nights"} · ${money(Number(option.totalCost) / nights, currency)} / night` : "Choose dates and a total price to calculate cost per night."}</p>
-                <button className={`${button} px-2 text-[#ae2a19] hover:bg-[#ffebe6]`} type="button" aria-label={`Remove option ${index + 1}`} onClick={() => { setOptions((current) => current.filter((item) => item.id !== option.id)); if (confirmed === option.id) setConfirmed(""); }}>Remove</button>
+                <button className={`${button} px-2 text-destructive hover:bg-destructive-soft`} type="button" aria-label={`Remove option ${index + 1}`} onClick={() => { setOptions((current) => current.filter((item) => item.id !== option.id)); if (confirmed === option.id) setConfirmed(""); }}>Remove</button>
               </div>
               <label className="mt-2 flex items-center gap-2 text-sm font-semibold"><input type="radio" name="confirmSelection" checked={confirmed === option.id} onChange={() => setConfirmed(option.id)} />Confirm this stay</label>
             </fieldset>;
@@ -100,26 +100,26 @@ function CandidateEditor({ tripId, place, candidate, onClose }: { tripId: string
           <div className="flex flex-wrap gap-2"><button className={secondary} type="button" disabled={options.length >= 50} onClick={() => setOptions((current) => [...current, { id: crypto.randomUUID(), checkIn: "", checkOut: "", totalCost: "" }])}>+ Add date option</button>
             {confirmed && <button className={secondary} type="button" onClick={() => setConfirmed("")}>Mark as unconfirmed</button>}</div>
         </section>
-        <section className="grid gap-4 border-t border-[#dcdfe4] pt-5" aria-label="Booking details">
-          <div><h3 className="font-bold">Booking details</h3><p className="mt-1 text-sm text-[#626f86]">{confirmed ? "Your selected dates will be marked confirmed when you save." : "Select a date option above to confirm this accommodation."}</p></div>
+        <section className="grid gap-4 border-t border-border pt-5" aria-label="Booking details">
+          <div><h3 className="font-semibold">Booking details</h3><p className="mt-1 text-sm text-muted-foreground">{confirmed ? "Your selected dates will be marked confirmed when you save." : "Select a date option above to confirm this accommodation."}</p></div>
           <label className={label}>Booked via<input className={input} name="bookedVia" maxLength={200} defaultValue={candidate?.bookedVia} placeholder="e.g. Booking.com, Airbnb, hotel website" /></label>
-          <label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" name="freeCancellation" checked={freeCancellation} onChange={(event) => setFreeCancellation(event.target.checked)} />Free cancellation</label>
+          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="freeCancellation" checked={freeCancellation} onChange={(event) => setFreeCancellation(event.target.checked)} />Free cancellation</label>
           {freeCancellation && <div className="grid gap-3 sm:grid-cols-2">
             <label className={label}>Free cancellation until<input className={input} type="datetime-local" name="cancellationUntil" required defaultValue={candidate?.cancellationUntil} /></label>
-            <label className={label}>Cancellation time zone<input className={input} name="cancellationTimezone" required defaultValue={candidate?.cancellationTimezone} placeholder="e.g. Asia/Tokyo" /><span className="text-xs font-normal text-[#626f86]">Use the time zone on your booking.</span></label>
+            <label className={label}>Cancellation time zone<input className={input} name="cancellationTimezone" required defaultValue={candidate?.cancellationTimezone} placeholder="e.g. Asia/Tokyo" /><span className="text-xs font-normal text-muted-foreground">Use the time zone on your booking.</span></label>
           </div>}
           <label className={label}>Description<textarea className={`${input} min-h-28 resize-y`} name="description" maxLength={10000} defaultValue={candidate?.description} placeholder="Who made the booking, confirmation number, room details…" /></label>
-          {candidate?.document && <div className="rounded-xl bg-[#f4f6f8] p-3 text-sm">
-            <a className="font-semibold text-[#0c66e4] hover:underline" href={documentUrl(tripId, candidate.document)} target="_blank" rel="noreferrer">{candidate.document.filename}</a><span className="ml-2 text-[#626f86]">{formatFileSize(candidate.document.size)}</span>
-            <a className="ml-3 text-[#0c66e4] hover:underline" href={`${documentUrl(tripId, candidate.document)}?download`} download>Download PDF</a>
+          {candidate?.document && <div className="rounded-xl bg-background p-3 text-sm">
+            <a className="font-semibold text-primary hover:underline" href={documentUrl(tripId, candidate.document)} target="_blank" rel="noreferrer">{candidate.document.filename}</a><span className="ml-2 text-muted-foreground">{formatFileSize(candidate.document.size)}</span>
+            <a className="ml-3 text-primary hover:underline" href={`${documentUrl(tripId, candidate.document)}?download`} download>Download PDF</a>
             <label className="mt-2 flex items-center gap-2"><input type="checkbox" name="removeDocument" />Remove booking PDF</label>
           </div>}
-          <label className={label}>{candidate?.document ? "Replace booking PDF" : "Booking confirmation PDF"}<input className={`${input} file:mr-3 file:cursor-pointer file:font-semibold`} type="file" name="document" accept="application/pdf,.pdf" /><span className="text-xs font-normal text-[#626f86]">One PDF, up to 10 MB. Uploaded when you save.</span></label>
+          <label className={label}>{candidate?.document ? "Replace booking PDF" : "Booking confirmation PDF"}<input className={`${input} file:mr-3 file:cursor-pointer file:font-semibold`} type="file" name="document" accept="application/pdf,.pdf" /><span className="text-xs font-normal text-muted-foreground">One PDF, up to 10 MB. Uploaded when you save.</span></label>
         </section>
       </fieldset>
-      {fetcher.data?.error && <p role="alert" className="text-sm font-medium text-[#ae2a19]">{fetcher.data.error}</p>}
-      <div className="flex flex-wrap justify-end gap-2 border-t border-[#dcdfe4] pt-4">
-        {candidate && <button type="button" disabled={busy} className={`${button} mr-auto text-[#ae2a19] hover:bg-[#ffebe6]`} onClick={() => {
+      {fetcher.data?.error && <p role="alert" className="text-sm font-medium text-destructive">{fetcher.data.error}</p>}
+      <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+        {candidate && <button type="button" disabled={busy} className={`${button} mr-auto text-destructive hover:bg-destructive-soft`} onClick={() => {
           if (!window.confirm(`Delete “${candidate.name}” and its booking PDF? This cannot be undone.`)) return;
           submitted.current = true;
           fetcher.submit({ intent: "delete-candidate", placeId: place.id, accommodationId: candidate.id }, { method: "post" });
@@ -136,36 +136,36 @@ function PlaceSection({ place, tripId, onEdit }: { place: Place; tripId: string;
   const [renaming, setRenaming] = useState(false);
   const submitted = useRef(false);
   useEffect(() => { if (fetcher.state === "idle" && submitted.current) { submitted.current = false; if (fetcher.data?.ok) setRenaming(false); } }, [fetcher.state, fetcher.data]);
-  return <section aria-label={`Accommodations in ${place.name}`} className="rounded-2xl border border-[#dcdfe4] bg-white p-5 sm:p-6">
+  return <section aria-label={`Accommodations in ${place.name}`} className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <div><h3 className="text-xl font-bold">{place.name}</h3><p className="mt-1 text-sm text-[#626f86]">{place.candidates.length} {place.candidates.length === 1 ? "candidate" : "candidates"} · {place.candidates.filter((candidate) => candidate.confirmedOptionId).length} confirmed</p></div>
+      <div><h3 className="text-xl font-semibold">{place.name}</h3><p className="mt-1 text-sm text-muted-foreground">{place.candidates.length} {place.candidates.length === 1 ? "candidate" : "candidates"} · {place.candidates.filter((candidate) => candidate.confirmedOptionId).length} confirmed</p></div>
       <div className="flex flex-wrap gap-1"><button type="button" className={secondary} onClick={() => setRenaming(!renaming)}>Edit place</button><button type="button" className={primary} onClick={() => onEdit()}>+ Add accommodation</button></div>
     </div>
-    {renaming && <fetcher.Form method="post" className="mb-5 flex flex-wrap items-end gap-2 rounded-xl bg-[#f4f6f8] p-4" onSubmit={() => { submitted.current = true; }}>
+    {renaming && <fetcher.Form method="post" className="mb-5 flex flex-wrap items-end gap-2 rounded-xl bg-background p-4" onSubmit={() => { submitted.current = true; }}>
       <input type="hidden" name="intent" value="rename-place" /><input type="hidden" name="placeId" value={place.id} />
       <label className={`${label} flex-1`}>City / area / region<input className={input} name="name" defaultValue={place.name} required maxLength={200} /></label>
       <button className={primary} disabled={fetcher.state !== "idle"}>Save place</button>
-      <button className={`${button} text-[#ae2a19]`} type="button" disabled={fetcher.state !== "idle"} onClick={() => { if (window.confirm(`Delete “${place.name}”, all its accommodations and booking PDFs? This cannot be undone.`)) fetcher.submit({ intent: "delete-place", placeId: place.id }, { method: "post" }); }}>Delete place</button>
+      <button className={`${button} text-destructive`} type="button" disabled={fetcher.state !== "idle"} onClick={() => { if (window.confirm(`Delete “${place.name}”, all its accommodations and booking PDFs? This cannot be undone.`)) fetcher.submit({ intent: "delete-place", placeId: place.id }, { method: "post" }); }}>Delete place</button>
     </fetcher.Form>}
-    {fetcher.data?.error && <p role="alert" className="mb-3 text-sm text-[#ae2a19]">{fetcher.data.error}</p>}
-    {!place.candidates.length && <p className="rounded-xl border border-dashed border-[#b6beca] p-6 text-sm text-[#626f86]">Start a shortlist of hotels and Airbnbs for {place.name}.</p>}
+    {fetcher.data?.error && <p role="alert" className="mb-3 text-sm text-destructive">{fetcher.data.error}</p>}
+    {!place.candidates.length && <p className="rounded-xl border border-dashed border-input p-6 text-sm text-muted-foreground">Start a shortlist of hotels and Airbnbs for {place.name}.</p>}
     <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
-      {place.candidates.map((candidate) => <article key={candidate.id} className={`min-w-0 rounded-xl border p-4 ${candidate.confirmedOptionId ? "border-[#b3dfca] bg-[#effaf4]" : "border-[#dcdfe4] bg-[#f7f8f9]"}`}>
-        <div className="mb-2 flex items-center justify-between gap-2 text-xs font-bold"><span className="text-[#626f86]">{candidate.kind === "hotel" ? "HOTEL" : "AIRBNB"}</span><span className={`rounded-full px-2 py-1 ${candidate.confirmedOptionId ? "bg-[#d3f1e0] text-[#216e4e]" : "bg-[#ebecf0] text-[#626f86]"}`}>{candidate.confirmedOptionId ? "Confirmed" : "Shortlisted"}</span></div>
-        <button type="button" className="cursor-pointer text-left text-lg font-bold break-words hover:text-[#0c66e4] hover:underline" onClick={() => onEdit(candidate)}>{candidate.name}</button>
-        {candidate.googlePlaceId && <a className="mt-2 block text-sm break-words text-[#0c66e4] hover:underline" href={googleMapsUrl(candidate.googlePlaceId, candidate.googleMapsQuery ?? candidate.name)} target="_blank" rel="noreferrer">{candidate.googleMapsQuery || "View address on Google Maps"} ↗</a>}
+      {place.candidates.map((candidate) => <article key={candidate.id} className={`min-w-0 rounded-xl border p-4 ${candidate.confirmedOptionId ? "border-success-border bg-success-soft" : "border-border bg-background"}`}>
+        <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold"><span className="text-muted-foreground">{candidate.kind === "hotel" ? "HOTEL" : "AIRBNB"}</span><span className={`rounded-full px-2 py-1 ${candidate.confirmedOptionId ? "bg-accent text-success" : "bg-muted text-muted-foreground"}`}>{candidate.confirmedOptionId ? "Confirmed" : "Shortlisted"}</span></div>
+        <button type="button" className="cursor-pointer text-left text-lg font-semibold break-words hover:text-primary hover:underline" onClick={() => onEdit(candidate)}>{candidate.name}</button>
+        {candidate.googlePlaceId && <a className="mt-2 block text-sm break-words text-primary hover:underline" href={googleMapsUrl(candidate.googlePlaceId, candidate.googleMapsQuery ?? candidate.name)} target="_blank" rel="noreferrer">{candidate.googleMapsQuery || "View address on Google Maps"} ↗</a>}
         <ul className="mt-4 grid gap-2">
-          {candidate.dateOptions.map((option) => <li key={option.id} className={`rounded-lg p-3 text-sm ${option.id === candidate.confirmedOptionId ? "bg-white ring-1 ring-[#b3dfca]" : "bg-white/70"}`}>
-            {option.id === candidate.confirmedOptionId && <p className="mb-1 text-xs font-bold text-[#216e4e]">CONFIRMED STAY</p>}
+          {candidate.dateOptions.map((option) => <li key={option.id} className={`rounded-lg p-3 text-sm ${option.id === candidate.confirmedOptionId ? "bg-surface ring-1 ring-success-border" : "bg-surface/70"}`}>
+            {option.id === candidate.confirmedOptionId && <p className="mb-1 text-xs font-semibold text-success">CONFIRMED STAY</p>}
             <p>{dateLabel(option.checkIn)} → {dateLabel(option.checkOut)}</p><p className="mt-1 font-semibold">{money(Number(option.totalCost), candidate.currency)} total</p>
-            <p className="mt-0.5 text-xs text-[#626f86]">{stayNights(option.checkIn, option.checkOut)} nights · {money(Number(option.totalCost) / stayNights(option.checkIn, option.checkOut), candidate.currency)} / night</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{stayNights(option.checkIn, option.checkOut)} nights · {money(Number(option.totalCost) / stayNights(option.checkIn, option.checkOut), candidate.currency)} / night</p>
           </li>)}
         </ul>
-        {!candidate.dateOptions.length && <p className="mt-3 text-sm text-[#626f86]">No date options yet</p>}
+        {!candidate.dateOptions.length && <p className="mt-3 text-sm text-muted-foreground">No date options yet</p>}
         {candidate.bookedVia && <p className="mt-3 text-sm">Booked via <strong>{candidate.bookedVia}</strong></p>}
-        {candidate.freeCancellation ? <p className="mt-2 text-sm text-[#216e4e]">Free cancellation until {candidate.cancellationUntil.replace("T", " at ")} ({candidate.cancellationTimezone})</p> : candidate.confirmedOptionId && <p className="mt-2 text-sm text-[#626f86]">Free cancellation not indicated</p>}
-        {candidate.description && <p className="mt-3 line-clamp-3 text-sm whitespace-pre-wrap break-words text-[#44546f]">{candidate.description}</p>}
-        {candidate.document && <a className="mt-3 block text-sm font-semibold break-words text-[#0c66e4] hover:underline" href={documentUrl(tripId, candidate.document)} target="_blank" rel="noreferrer">PDF · {candidate.document.filename}</a>}
+        {candidate.freeCancellation ? <p className="mt-2 text-sm text-success">Free cancellation until {candidate.cancellationUntil.replace("T", " at ")} ({candidate.cancellationTimezone})</p> : candidate.confirmedOptionId && <p className="mt-2 text-sm text-muted-foreground">Free cancellation not indicated</p>}
+        {candidate.description && <p className="mt-3 line-clamp-3 text-sm whitespace-pre-wrap break-words text-secondary-foreground">{candidate.description}</p>}
+        {candidate.document && <a className="mt-3 block text-sm font-semibold break-words text-primary hover:underline" href={documentUrl(tripId, candidate.document)} target="_blank" rel="noreferrer">PDF · {candidate.document.filename}</a>}
         <button type="button" className={`${secondary} mt-3 -ml-4`} onClick={() => onEdit(candidate)}>Edit details</button>
       </article>)}
     </div>
@@ -193,14 +193,14 @@ export default function Accommodations({ loaderData: { places, tripId } }: Route
   }
   useEffect(() => { if (fetcher.state === "idle" && submitted.current) { submitted.current = false; if (fetcher.data?.ok) form.current?.reset(); } }, [fetcher.state, fetcher.data]);
   return <>
-    <div className="mb-6"><h2 className="text-2xl font-bold tracking-tight">A place to stay</h2><p className="mt-2 text-sm text-[#626f86]">Shortlist stays, compare dates and prices, and keep your bookings together.</p></div>
+    <div className="mb-6"><h2 className="text-2xl font-semibold tracking-tight">A place to stay</h2><p className="mt-2 text-sm text-muted-foreground">Shortlist stays, compare dates and prices, and keep your bookings together.</p></div>
     <fetcher.Form ref={form} method="post" className="mb-7 flex max-w-xl flex-wrap items-end gap-2" onSubmit={() => { submitted.current = true; }}>
       <input type="hidden" name="intent" value="add-place" />
       <label className={`${label} min-w-48 flex-1`}>City / area / region<input className={input} name="name" required maxLength={200} placeholder="e.g. Tokyo, Lake District, Tuscany" /></label>
       <button type="submit" className={primary} disabled={fetcher.state !== "idle"}>{fetcher.state === "idle" ? "Add place" : "Adding…"}</button>
-      {fetcher.data?.error && <p role="alert" className="w-full text-sm text-[#ae2a19]">{fetcher.data.error}</p>}
+      {fetcher.data?.error && <p role="alert" className="w-full text-sm text-destructive">{fetcher.data.error}</p>}
     </fetcher.Form>
-    {!places.length && <div className="rounded-2xl border border-dashed border-[#b6beca] bg-white px-6 py-14 text-center"><h3 className="text-lg font-bold">Where would you like to stay?</h3><p className="mt-2 text-sm text-[#626f86]">Add your first city, area, or region to start comparing accommodations.</p></div>}
+    {!places.length && <div className="rounded-2xl border border-dashed border-input bg-surface px-6 py-14 text-center"><h3 className="text-lg font-semibold">Where would you like to stay?</h3><p className="mt-2 text-sm text-muted-foreground">Add your first city, area, or region to start comparing accommodations.</p></div>}
     <div className="grid gap-6">{places.map((place) => <PlaceSection key={place.id} place={place} tripId={tripId} onEdit={(candidate) => setEditor({ place, candidate })} />)}</div>
     {activeEditor && <CandidateEditor key={activeEditor.candidate?.id ?? activeEditor.place.id} tripId={tripId} place={activeEditor.place} candidate={activeEditor.candidate} onClose={closeEditor} />}
   </>;

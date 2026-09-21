@@ -180,23 +180,23 @@ function RouteCanvas({
 
   return (
     <div className="grid gap-3">
-      <div className="relative min-h-72 overflow-hidden rounded-[12px] border border-[#dcdfe4] bg-[#f1f2f4]">
+      <div className="relative min-h-72 overflow-hidden rounded-[12px] border border-border bg-muted">
         <div ref={containerRef} className="absolute inset-0" aria-label={`Transit route map from ${origin} to ${destination}`} />
         {status === "loading" && (
-          <div className="absolute inset-0 grid place-items-center bg-[#f7f8f9]/90 text-sm font-semibold text-[#44546f]" role="status">
+          <div className="absolute inset-0 grid place-items-center bg-background/90 text-sm font-semibold text-secondary-foreground" role="status">
             Calculating route…
           </div>
         )}
         {status === "error" && (
-          <div className="absolute inset-0 grid place-items-center bg-[#fff7f5] p-6 text-center text-sm font-medium text-[#ae2a19]" role="alert">
+          <div className="absolute inset-0 grid place-items-center bg-destructive-soft p-6 text-center text-sm font-medium text-destructive" role="alert">
             Google Maps could not calculate this route. Check the locations, schedule, and API access, then try again.
           </div>
         )}
         {status === "no-route" && (
-          <div className="absolute inset-0 grid place-items-center bg-[#f7f8f9]/95 p-6 text-center" role="status">
+          <div className="absolute inset-0 grid place-items-center bg-background/95 p-6 text-center" role="status">
             <div className="max-w-md">
-              <p className="text-sm font-semibold text-[#172b4d]">No public-transit route is available from the Google Routes API.</p>
-              <p className="mt-2 text-xs leading-relaxed text-[#626f86]">
+              <p className="text-sm font-semibold text-foreground">No public-transit route is available from the Google Routes API.</p>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                 Try more specific station names or another time. Transit coverage can also differ from the consumer Google Maps app, which you can open below.
               </p>
             </div>
@@ -204,18 +204,18 @@ function RouteCanvas({
         )}
       </div>
       {status === "ready" && summary && (
-        <div className="grid gap-2 text-sm text-[#44546f]">
+        <div className="grid gap-2 text-sm text-secondary-foreground">
           <div className="flex flex-wrap gap-x-4 gap-y-1 font-semibold">
             {summary.duration && <span>{summary.duration}</span>}
             {summary.distance && <span>{summary.distance}</span>}
             {summary.fare && <span>{summary.fare}</span>}
           </div>
           {usedGeneralTransit && (
-            <p className="text-xs text-[#626f86]">No {plan.preferredMode === "TRAIN" ? "train-only" : "subway-only"} result was available, so this route may include other public transport.</p>
+            <p className="text-xs text-muted-foreground">No {plan.preferredMode === "TRAIN" ? "train-only" : "subway-only"} result was available, so this route may include other public transport.</p>
           )}
           {summary.lines.length > 0 && <p>Lines: {summary.lines.join(" · ")}</p>}
           {summary.agencies.length > 0 && (
-            <p className="text-xs text-[#626f86]">
+            <p className="text-xs text-muted-foreground">
               Transit data by {summary.agencies.map((agency, index) => (
                 <span key={`${agency.name}:${agency.url ?? ""}`}>
                   {index > 0 && ", "}
@@ -263,27 +263,27 @@ export function TransportRouteMap({
   useEffect(() => setClientReady(true), []);
 
   return (
-    <section className="grid gap-3 rounded-[12px] border border-[#b8cdf0] bg-[#f3f7fd] p-4" aria-labelledby="transport-route-heading">
+    <section className="grid gap-3 rounded-[12px] border border-info-border bg-info-soft p-4" aria-labelledby="transport-route-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-bold text-[#172b4d]" id="transport-route-heading">Google Maps route</h3>
-          <p className="mt-1 text-xs leading-relaxed text-[#626f86]">
+          <h3 className="font-semibold text-foreground" id="transport-route-heading">Google Maps route</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             Uses the trip day and {departureTime ? "departure" : "arrival"} time in {plan.ok ? plan.timeZone : "your device’s time zone"}.
           </p>
         </div>
         <button
           type="button"
-          className="h-9 cursor-pointer rounded-[9px] bg-[#0c66e4] px-3 text-sm font-bold text-white hover:bg-[#0055cc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] disabled:cursor-not-allowed disabled:bg-[#b6beca]"
+          className="h-9 cursor-pointer rounded-[9px] bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:bg-input"
           disabled={!apiKey || !origin.trim() || !destination.trim() || !plan.ok}
           onClick={() => setAttempt({ id: (attempt?.id ?? 0) + 1, signature })}
         >
           {showMap ? "Refresh route" : "Preview route"}
         </button>
       </div>
-      {!apiKey && <p className="text-sm font-medium text-[#ae2a19]">Add GOOGLE_MAPS_BROWSER_API_KEY to .dev.vars to enable route previews.</p>}
-      {apiKey && !plan.ok && <p className="text-sm text-[#626f86]">{plan.error}</p>}
+      {!apiKey && <p className="text-sm font-medium text-destructive">Add GOOGLE_MAPS_BROWSER_API_KEY to .dev.vars to enable route previews.</p>}
+      {apiKey && !plan.ok && <p className="text-sm text-muted-foreground">{plan.error}</p>}
       {plan.ok && departureTime && arrivalTime && (
-        <p className="text-xs text-[#626f86]">Google accepts one schedule anchor, so this preview uses the departure time.</p>
+        <p className="text-xs text-muted-foreground">Google accepts one schedule anchor, so this preview uses the departure time.</p>
       )}
       {showMap && plan.ok && (
         <RouteCanvas
@@ -295,7 +295,7 @@ export function TransportRouteMap({
         />
       )}
       {origin.trim() && destination.trim() && (
-        <a className="w-fit text-sm font-semibold text-[#0c66e4] hover:underline" href={directionsUrl} target="_blank" rel="noopener noreferrer">
+        <a className="w-fit text-sm font-semibold text-primary hover:underline" href={directionsUrl} target="_blank" rel="noopener noreferrer">
           Open directions in Google Maps <span aria-hidden="true">↗</span>
         </a>
       )}

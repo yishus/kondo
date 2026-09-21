@@ -113,18 +113,18 @@ export function CityLocationsMap({ apiKey, locations }: {
   }, [apiKey, locations, visible]);
 
   return (
-    <section ref={rootRef} className="overflow-hidden rounded-[10px] border border-[#dcdfe4] bg-white/70" aria-label={`Map of ${locations.length} area ${locations.length === 1 ? "location" : "locations"}`}>
-      <div className="relative h-44 w-full overflow-hidden bg-[#eef1f4]">
+    <section ref={rootRef} className="overflow-hidden rounded-[10px] border border-border bg-surface/70" aria-label={`Map of ${locations.length} area ${locations.length === 1 ? "location" : "locations"}`}>
+      <div className="relative h-44 w-full overflow-hidden bg-muted">
         <div ref={mapRef} className="h-full w-full" />
         {(!apiKey || status !== "ready") && (
-          <div className="absolute inset-0 grid place-items-center px-5 text-center text-xs font-semibold text-[#626f86]">
+          <div className="absolute inset-0 grid place-items-center px-5 text-center text-xs font-semibold text-muted-foreground">
             {!apiKey ? "Add a Google Maps browser API key to show this map." : status === "error" ? "The location map could not be loaded." : "Loading location map…"}
           </div>
         )}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1 px-3 py-2" aria-label="Map pin legend">
         {typeLegend.map((type) => (
-          <span key={type} className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-semibold text-[#44546f]">
+          <span key={type} className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-semibold text-secondary-foreground">
             <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: cityLocationTypeColor(type) }} aria-hidden="true" />
             <span className="truncate">{type}</span>
           </span>

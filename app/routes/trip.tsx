@@ -21,6 +21,7 @@ import { moveCard } from "../card-move.server";
 import { deleteCard } from "../card-delete.server";
 import { previewCardMove, UNSCHEDULED_COLUMN_ID, type CardMove, type TripCard, type TripColumn } from "../card-order";
 import { CardDragBoard, CardDropSlot, DraggableCard } from "../components/card-drag";
+import { Icon } from "../components/icon";
 
 type ActiveCard =
   | { mode: "create"; tripDayId: string }
@@ -393,14 +394,14 @@ function UnscheduledColumn({ column, onAddCard, onOpenCard, moving }: {
 }) {
   const destination = { tripDayId: column.id };
   return (
-    <section className="min-w-[240px] rounded-[14px] border border-[#c5c0db] bg-[#eeebf5] p-[14px]" aria-label="Unscheduled cards">
-      <div className="flex items-center justify-between gap-2 px-1 pb-3">
-        <h2 className="py-1 text-[0.95rem] font-bold">Unscheduled</h2>
-        <span className="grid size-[26px] shrink-0 place-items-center rounded-full bg-[#ddd7ee] text-xs font-bold text-[#44546f]" aria-label={`${column.cards.length} cards`}>
+    <section className="board-column" aria-label="Unscheduled cards">
+      <div className="board-column-header">
+        <h2 className="flex items-center gap-2 py-1 text-[13px] font-semibold"><Icon name="compass" width="16" height="16" className="text-muted-foreground" />Unscheduled</h2>
+        <span className="count-badge bg-surface" aria-label={`${column.cards.length} cards`}>
           {column.cards.length}
         </span>
       </div>
-      <p className="mb-3 px-1 text-xs leading-relaxed text-[#626f86]">Park ideas here. Pick a day when you’re ready.</p>
+      <p className="mt-3 px-1 text-[11px] leading-relaxed text-muted-foreground">Park ideas here. Pick a day when you’re ready.</p>
       <div className="grid">
         {column.cards.map((card) => (
           <CardDropSlot key={card.id} destination={{ ...destination, beforeCardId: card.id }} label={`Before ${card.title}, Unscheduled`} disabled={moving}>
@@ -409,9 +410,9 @@ function UnscheduledColumn({ column, onAddCard, onOpenCard, moving }: {
         ))}
         <CardDropSlot destination={{ ...destination, beforeCardId: null }} label="End of Unscheduled" disabled={moving}>
           {column.cards.length === 0 && (
-            <p className="mb-2 rounded-lg border border-dashed border-[#c5c0db] px-3 py-6 text-center text-sm text-[#626f86]">Drop cards here to plan them later.</p>
+            <p className="mb-2 rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">Drop cards here to plan them later.</p>
           )}
-          <button className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-[#dcdfe4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] w-full text-left text-[#44546f]" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
+          <button className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary w-full text-left text-secondary-foreground" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
             <span aria-hidden="true">＋</span> Add card
           </button>
         </CardDropSlot>
@@ -461,7 +462,7 @@ function DayColumn({
           label={`End of ${formatTripDate(column.date)}`}
           disabled={moving}
         >
-          <button className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-[#dcdfe4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] w-full text-left text-[#44546f]" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
+          <button className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary w-full text-left text-secondary-foreground" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
             <span aria-hidden="true">＋</span> Add card
           </button>
         </CardDropSlot>
@@ -470,14 +471,15 @@ function DayColumn({
   }
 
   return (
-    <div className="grid min-w-[320px] gap-3">
+    <div className="grid min-w-0 gap-3">
     <section
-      className="min-w-[320px] rounded-[14px] border border-[#dcdfe4] bg-[#ebecf0] p-[14px]"
+      className="board-column"
       aria-label={`Itinerary for ${formatTripDate(column.date)}`}
     >
-      <div className="flex items-center justify-between px-1 pb-3">
+      <div className="board-column-header">
+        <Icon name="calendar" width="16" height="16" className="shrink-0 text-muted-foreground" />
         <input
-          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 text-[0.95rem] font-bold text-[#172b4d] outline-none transition hover:bg-white/60 focus:border-[#0c66e4] focus:bg-white focus:ring-2 focus:ring-[#0c66e4]/20 aria-invalid:border-[#ae2a19] disabled:cursor-wait"
+          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 text-[13px] font-semibold text-foreground outline-none transition hover:bg-surface/60 focus:border-primary focus:bg-surface focus:ring-2 focus:ring-primary/20 aria-invalid:border-destructive disabled:cursor-wait"
           type="date"
           value={displayedDate}
           disabled={fetcher.state !== "idle"}
@@ -500,7 +502,7 @@ function DayColumn({
           }}
         />
         <span
-          className="ml-2 grid size-[26px] shrink-0 place-items-center rounded-full bg-[#dcdfe4] text-xs font-bold text-[#44546f]"
+          className="count-badge shrink-0 bg-surface"
           aria-label={`${column.cards.length} cards`}
         >
           {column.cards.length}
@@ -508,7 +510,7 @@ function DayColumn({
       </div>
 
       {error && (
-        <p className="mb-3 px-1 text-xs font-medium text-[#ae2a19]" id={errorId}>
+        <p className="mb-3 px-1 text-xs font-medium text-destructive" id={errorId}>
           {error}
         </p>
       )}
@@ -516,12 +518,12 @@ function DayColumn({
       {renderCards()}
     </section>
     {confirmedStays.filter((stay) => stay.checkIn <= displayedDate && displayedDate < stay.checkOut).map((stay) => (
-      <article key={stay.id} aria-label={`Confirmed accommodation: ${stay.name}`} className="rounded-[14px] border border-[#b3dfca] bg-[#effaf4] p-4">
-        <p className="mb-2 text-xs font-bold tracking-wide text-[#216e4e]">CONFIRMED STAY</p>
-        <h3 className="font-bold break-words">{stay.name}</h3>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-[#0c66e4]">
+      <article key={stay.id} aria-label={`Confirmed accommodation: ${stay.name}`} className="rounded-[14px] border border-success-border bg-success-soft p-4">
+        <p className="mb-2 text-xs font-semibold tracking-wide text-success">CONFIRMED STAY</p>
+        <h3 className="font-semibold break-words">{stay.name}</h3>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-primary">
           <a href={stay.mapsUrl} target="_blank" rel="noreferrer" draggable={false} className="hover:underline">Google Maps ↗</a>
-          <Link to={`/trips/${encodeURIComponent(tripId)}/accommodations?edit=${encodeURIComponent(stay.id)}`} draggable={false} aria-label={`Edit ${stay.name}`} className="rounded-lg px-3 py-2 hover:bg-[#d3f1e0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]">Edit</Link>
+          <Link to={`/trips/${encodeURIComponent(tripId)}/accommodations?edit=${encodeURIComponent(stay.id)}`} draggable={false} aria-label={`Edit ${stay.name}`} className="rounded-lg px-3 py-2 hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Edit</Link>
         </div>
       </article>
     ))}
@@ -670,17 +672,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
+      <div className="board-toolbar">
+      <div><h2>Day by day</h2><p>{tripColumns.filter((column) => column.date !== null).length} days · {tripColumns.reduce((count, column) => count + column.cards.length, 0)} cards in your itinerary</p></div>
       <addDayFetcher.Form
-        className="mb-[36px] flex flex-wrap items-end gap-2.5"
+        className="flex flex-wrap items-end gap-2.5"
         method="post"
       >
         <input name="intent" type="hidden" value="add-day" />
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-bold" htmlFor="trip-date">
+          <label className="sr-only" htmlFor="trip-date">
             Add a day
           </label>
           <input
-            className="h-10 rounded-[10px] border border-[#b6beca] bg-white px-3 text-sm text-[#172b4d] shadow-[0_1px_2px_rgb(9_30_66_/_8%)] outline-none transition focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20 aria-invalid:border-[#ae2a19]"
+            className="h-10 rounded-[10px] border border-input bg-surface px-3 text-sm text-foreground shadow-[0_1px_2px_rgb(9_30_66_/_8%)] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 aria-invalid:border-destructive"
             id="trip-date"
             name="date"
             type="date"
@@ -694,7 +698,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           />
         </div>
         <button
-          className="h-10 rounded-[10px] bg-[#0c66e4] px-4 text-sm font-bold text-white transition hover:bg-[#0055cc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] disabled:cursor-not-allowed disabled:bg-[#b6beca]"
+          className="h-10 rounded-[10px] bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:bg-input"
           type="submit"
           disabled={
             !selectedDate ||
@@ -705,20 +709,21 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           {addDayFetcher.state === "idle" ? "Add day" : "Adding…"}
         </button>
         {addError && (
-          <p className="w-full text-sm font-medium text-[#ae2a19]" id="date-error">
+          <p className="w-full text-sm font-medium text-destructive" id="date-error">
             {addError}
           </p>
         )}
       </addDayFetcher.Form>
+      </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#626f86]">
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <p>Drag a card’s handle to reorder it or move it between days and Unscheduled.</p>
         <p role="status">{moving ? "Saving move…" : moveFetcher.data?.ok ? "Move saved." : ""}</p>
-        {!moving && moveFetcher.data?.error && <p role="alert" className="text-[#ae2a19]">{moveFetcher.data.error}</p>}
+        {!moving && moveFetcher.data?.error && <p role="alert" className="text-destructive">{moveFetcher.data.error}</p>}
       </div>
       <CardDragBoard onMove={submitMove}>
       <section
-        className="grid auto-cols-[minmax(320px,1fr)] grid-flow-col items-start gap-[18px] overflow-x-auto pb-5 max-[760px]:auto-cols-[minmax(320px,82vw)]"
+        className="planning-board"
         aria-label={`${trip.title} planning board`}
       >
         {displayedColumns.map((column) => column.date === null ? (
@@ -739,26 +744,26 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
       {activeCard && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#091e42]/60 p-4 backdrop-blur-[2px]"
+          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-overlay/60 p-4 backdrop-blur-[2px]"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeCard();
           }}
         >
           <section
-            className={`max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-2xl bg-white p-6 shadow-[0_20px_48px_rgb(9_30_66_/_30%)] ${cardDraft.type === "transport" ? "max-w-3xl" : "max-w-xl"}`}
+            className={`max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-2xl bg-surface p-6 shadow-[0_20px_48px_rgb(9_30_66_/_30%)] ${cardDraft.type === "transport" ? "max-w-3xl" : "max-w-xl"}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="card-dialog-heading"
           >
             <div className="mb-5 flex items-center justify-between gap-4">
               <h2
-                className="text-xl font-bold tracking-[-0.02em]"
+                className="text-xl font-semibold tracking-[-0.02em]"
                 id="card-dialog-heading"
               >
                 {activeCard.mode === "create" ? "Add card" : "Card details"}
               </h2>
               <button
-                className="grid size-8 cursor-pointer place-items-center rounded-full text-2xl leading-none text-[#626f86] transition hover:bg-[#ebecf0] hover:text-[#172b4d] focus-visible:outline-2 focus-visible:outline-[#0c66e4]"
+                className="grid size-8 cursor-pointer place-items-center rounded-full text-2xl leading-none text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
                 type="button"
                 aria-label={
                   activeCard.mode === "create"
@@ -798,9 +803,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 <input name="cardId" type="hidden" value={activeCard.cardId} />
               )}
 
-              <label className="grid min-w-0 gap-1.5 text-sm font-bold">
+              <label className="grid min-w-0 gap-1.5 text-sm font-semibold">
                 Card type
-                <select className="min-w-0 w-full rounded-[10px] border border-[#b6beca] bg-white px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]" value={cardDraft.type} disabled={activeCard.mode === "edit"}
+                <select className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" value={cardDraft.type} disabled={activeCard.mode === "edit"}
                   onChange={(event) => setCardDraft((draft) => ({ ...draft, type: event.target.value as CardType }))}>
                   {Object.entries(cardTypes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
@@ -808,22 +813,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               </label>
 
               {cardDraft.type === "transport" && <>
-                <label className="grid min-w-0 gap-1.5 text-sm font-bold">Mode of transport
-                  <select className="min-w-0 w-full rounded-[10px] border border-[#b6beca] bg-white px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]" name="transportMode" value={cardDraft.transportMode} onChange={(event) => setCardDraft((draft) => ({ ...draft, transportMode: event.target.value }))}>
+                <label className="grid min-w-0 gap-1.5 text-sm font-semibold">Mode of transport
+                  <select className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" name="transportMode" value={cardDraft.transportMode} onChange={(event) => setCardDraft((draft) => ({ ...draft, transportMode: event.target.value }))}>
                     {Object.entries(transportModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
                 {([ ["startLocation", "Start location"], ["endLocation", "End location"] ] as const).map(([field, label]) => (
-                  <label key={field} className="grid min-w-0 gap-1.5 text-sm font-bold">{label}
-                    <input className="min-w-0 w-full rounded-[10px] border border-[#b6beca] bg-white px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]" name={field} required value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
+                  <label key={field} className="grid min-w-0 gap-1.5 text-sm font-semibold">{label}
+                    <input className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" name={field} required value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
                   </label>
                 ))}
                 <details>
-                  <summary className="cursor-pointer text-sm font-bold text-[#44546f]">Times and service details</summary>
+                  <summary className="cursor-pointer text-sm font-semibold text-secondary-foreground">Times and service details</summary>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     {([ ["departureTime", "Departure time"], ["arrivalTime", "Arrival time"], ["serviceNumber", "Service number"] ] as const).map(([field, label]) => (
-                      <label key={field} className="grid min-w-0 gap-1.5 text-sm font-bold">{label}
-                        <input className="min-w-0 w-full rounded-[10px] border border-[#b6beca] bg-white px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]" name={field} type={field === "serviceNumber" ? "text" : "time"} value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
+                      <label key={field} className="grid min-w-0 gap-1.5 text-sm font-semibold">{label}
+                        <input className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" name={field} type={field === "serviceNumber" ? "text" : "time"} value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
                       </label>
                     ))}
                   </div>
@@ -844,11 +849,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
               {cardDraft.type !== "transport" && (
               <div className="grid gap-1.5">
-                <label className="text-sm font-bold" htmlFor="card-title">
+                <label className="text-sm font-semibold" htmlFor="card-title">
                   {cardDraft.type === "city" ? "City / area / region name" : "Title"}
                 </label>
                 <input
-                  className="rounded-[10px] border border-[#b6beca] px-3 py-2.5 text-sm outline-none transition focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20"
+                  className="rounded-[10px] border border-input px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   id="card-title"
                   name="title"
                   ref={titleInputRef}
@@ -866,10 +871,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               )}
 
               {cardDraft.type === "location" && (
-                <label className="grid min-w-0 gap-1.5 text-sm font-bold">
+                <label className="grid min-w-0 gap-1.5 text-sm font-semibold">
                   Subcategory
                   <select
-                    className="min-w-0 w-full rounded-[10px] border border-[#b6beca] bg-white px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]"
+                    className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     name="locationCategory"
                     value={cardDraft.locationCategory}
                     onChange={(event) => setCardDraft((draft) => ({ ...draft, locationCategory: event.target.value }))}
@@ -900,13 +905,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               {cardDraft.type !== "city" && <>
               <div className="grid gap-1.5">
                 <label
-                  className="text-sm font-bold"
+                  className="text-sm font-semibold"
                   htmlFor="card-description"
                 >
                   Description
                 </label>
                 <textarea
-                  className="min-h-32 resize-y rounded-[10px] border border-[#b6beca] px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20"
+                  className="min-h-32 resize-y rounded-[10px] border border-input px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   id="card-description"
                   name="description"
                   value={cardDraft.description}
@@ -929,27 +934,27 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               </>}
 
               {cardErrorFor === activeCardKey && cardFetcher.data?.error && (
-                <p className="text-sm font-medium text-[#ae2a19]" role="alert">
+                <p className="text-sm font-medium text-destructive" role="alert">
                   {cardFetcher.data.error}
                 </p>
               )}
 
-              <div className="flex flex-wrap justify-end gap-2.5 border-t border-[#dcdfe4] pt-4">
+              <div className="flex flex-wrap justify-end gap-2.5 border-t border-border pt-4">
                 {activeCard.mode === "edit" && (
-                  <button type="button" className="mr-auto h-10 cursor-pointer rounded-[10px] px-3 text-sm font-bold text-[#ae2a19] hover:bg-[#ffebe6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ae2a19] disabled:cursor-wait disabled:opacity-50"
+                  <button type="button" className="mr-auto h-10 cursor-pointer rounded-[10px] px-3 text-sm font-semibold text-destructive hover:bg-destructive-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive disabled:cursor-wait disabled:opacity-50"
                     disabled={cardFetcher.state !== "idle"} onClick={confirmDeleteCard}>
                     {cardFetcher.state !== "idle" && cardFetcher.formData?.get("intent") === "delete-card" ? "Deleting…" : "Delete card"}
                   </button>
                 )}
                 <button
-                  className="h-10 cursor-pointer rounded-[10px] px-4 text-sm font-bold text-[#44546f] transition hover:bg-[#ebecf0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4]"
+                  className="h-10 cursor-pointer rounded-[10px] px-4 text-sm font-semibold text-secondary-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                   type="button"
                   onClick={closeCard}
                 >
                   Cancel
                 </button>
                 <button
-                  className="h-10 cursor-pointer rounded-[10px] bg-[#0c66e4] px-4 text-sm font-bold text-white transition hover:bg-[#0055cc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0c66e4] disabled:cursor-not-allowed disabled:bg-[#b6beca]"
+                  className="h-10 cursor-pointer rounded-[10px] bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:bg-input"
                   type="submit"
                   disabled={
                     (cardDraft.type === "transport" ? !cardDraft.startLocation.trim() || !cardDraft.endLocation.trim() : !cardDraft.title.trim()) || cardFetcher.state !== "idle"

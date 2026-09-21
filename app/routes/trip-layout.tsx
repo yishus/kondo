@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { eq, max, min } from "drizzle-orm";
-import { Form, Link, NavLink, Outlet, useFetcher } from "react-router";
+import { NavLink, Outlet, useFetcher } from "react-router";
 import type { Route } from "./+types/trip-layout";
 import type { action as ownersAction } from "./trip-owners";
 import { requireTripOwner } from "../auth.server";
@@ -8,6 +8,8 @@ import { getDb } from "../db.server";
 import { tripDays, trips } from "../db/schema";
 import { formatTripDates } from "../trip-dates";
 import { listTripOwners } from "../trip-owners.server";
+import { AppShell } from "../components/app-shell";
+import { Icon, type IconName } from "../components/icon";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const db = getDb(env.DB);
@@ -27,31 +29,32 @@ export default function TripLayout({ loaderData: { trip, dates, owners, currentU
   const dateSubtitle = formatTripDates(dates.start, dates.end);
   const ownerFetcher = useFetcher<typeof ownersAction>();
   const ownerError = ownerFetcher.data && !ownerFetcher.data.ok ? ownerFetcher.data.error : null;
-  return <main className="min-h-screen bg-[#f4f6f8] px-[clamp(20px,5vw,72px)] py-14 font-sans text-[#172b4d] max-[760px]:pt-9">
-    <header className="mb-7">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <Link className="inline-flex text-sm font-bold text-[#0c66e4] hover:text-[#0055cc]" to="/">← All trips</Link>
-        <Form action="/sign-out" method="post"><button className="text-sm font-bold text-[#0c66e4] hover:text-[#0055cc]" type="submit">Sign out</button></Form>
+  return <AppShell user={currentUser} trip={trip}>
+    <header className="page-heading">
+      <div className="min-w-0">
+        <span className="eyebrow">Your next chapter</span>
+        <h1>{trip.title}</h1>
+        {trip.description && <p className="page-description">{trip.description}</p>}
       </div>
-      <h1 className="text-[clamp(2rem,4vw,3.25rem)] font-bold tracking-[-0.04em]">{trip.title}</h1>
-      <p className="mt-2.5 text-[#626f86]">{dateSubtitle}</p>
-      {trip.description && <p className="mt-2.5 text-[#626f86]">{trip.description}</p>}
-      <details className="mt-5 max-w-2xl rounded-xl border border-[#dcdfe4] bg-white p-4">
-        <summary className="cursor-pointer text-sm font-bold">Owners ({owners.length})</summary>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {owners.map((owner) => <span key={owner.id} className="rounded-full bg-[#f1f2f4] px-3 py-1.5 text-sm text-[#44546f]">{owner.name}{owner.id === currentUser.id ? " (you)" : ""} · {owner.email}</span>)}
+      <span className="trip-count"><Icon name="calendar" width="15" height="15" />{dateSubtitle}</span>
+    </header>
+      <details className="owners-panel">
+        <summary><Icon name="users" width="16" height="16" /><span>Owners ({owners.length})</span><span className="ml-2 text-muted-foreground">Plan together</span><Icon name="chevron" width="14" height="14" /></summary>
+        <div className="owners-content">
+        <div className="flex flex-wrap gap-2">
+          {owners.map((owner) => <span key={owner.id} className="rounded-full bg-muted px-3 py-1.5 text-sm text-secondary-foreground">{owner.name}{owner.id === currentUser.id ? " (you)" : ""} · {owner.email}</span>)}
         </div>
         <ownerFetcher.Form action={`${base}/owners`} method="post" className="mt-4 flex flex-wrap items-end gap-2">
-          <label className="grid min-w-0 flex-1 basis-64 gap-1.5 text-sm font-bold">Add an owner by account email<input className="h-10 rounded-[10px] border border-[#b6beca] px-3 font-normal outline-none focus:border-[#0c66e4] focus:ring-2 focus:ring-[#0c66e4]/20" name="email" type="email" autoComplete="email" required disabled={ownerFetcher.state !== "idle"} /></label>
-          <button className="h-10 rounded-[10px] bg-[#0c66e4] px-4 text-sm font-bold text-white hover:bg-[#0055cc] disabled:cursor-wait disabled:opacity-60" type="submit" disabled={ownerFetcher.state !== "idle"}>{ownerFetcher.state === "idle" ? "Add owner" : "Adding…"}</button>
+          <label className="grid min-w-0 flex-1 basis-64 gap-1.5 text-sm font-semibold">Add an owner by account email<input className="h-10 rounded-[10px] border border-input px-3 font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" name="email" type="email" autoComplete="email" required disabled={ownerFetcher.state !== "idle"} /></label>
+          <button className="h-10 rounded-[10px] bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60" type="submit" disabled={ownerFetcher.state !== "idle"}>{ownerFetcher.state === "idle" ? "Add owner" : "Adding…"}</button>
         </ownerFetcher.Form>
-        {ownerError && <p role="alert" className="mt-2 text-sm font-medium text-[#ae2a19]">{ownerError}</p>}
-        {ownerFetcher.data?.ok && <p role="status" className="mt-2 text-sm font-medium text-[#216e4e]">Owner added.</p>}
+        {ownerError && <p role="alert" className="mt-2 text-sm font-medium text-destructive">{ownerError}</p>}
+        {ownerFetcher.data?.ok && <p role="status" className="mt-2 text-sm font-medium text-success">Owner added.</p>}
+        </div>
       </details>
-    </header>
-    <nav aria-label="Trip tabs" className="mb-7 flex gap-6 border-b border-[#dcdfe4]">
-      {[[base, "Itinerary"], [`${base}/accommodations`, "Accommodations"], [`${base}/notes`, "Notes"]].map(([to, label]) => <NavLink key={to} end to={to} className={({ isActive }) => `border-b-2 px-1 pb-3 text-sm font-bold ${isActive ? "border-[#0c66e4] text-[#0c66e4]" : "border-transparent text-[#626f86] hover:text-[#172b4d]"}`}>{label}</NavLink>)}
+    <nav aria-label="Trip tabs" className="trip-tabs">
+      {([[base, "Itinerary", "board"], [`${base}/accommodations`, "Accommodations", "bed"], [`${base}/notes`, "Notes", "notes"]] satisfies [string, string, IconName][]).map(([to, label, icon]) => <NavLink key={to} end to={to} className="trip-tab"><Icon name={icon} width="16" height="16" />{label}</NavLink>)}
     </nav>
     <Outlet />
-  </main>;
+  </AppShell>;
 }
