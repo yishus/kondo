@@ -673,7 +673,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <div className="board-toolbar">
-      <div><h2>Day by day</h2><p>{tripColumns.filter((column) => column.date !== null).length} days · {tripColumns.reduce((count, column) => count + column.cards.length, 0)} cards in your itinerary</p></div>
+      <p>{tripColumns.filter((column) => column.date !== null).length} days · {tripColumns.reduce((count, column) => count + column.cards.length, 0)} cards</p>
       <addDayFetcher.Form
         className="flex flex-wrap items-end gap-2.5"
         method="post"
@@ -717,7 +717,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <p>Drag a card’s handle to reorder it or move it between days and Unscheduled.</p>
+        <p className="sr-only">Drag a card’s handle to reorder it or move it between days and Unscheduled.</p>
         <p role="status">{moving ? "Saving move…" : moveFetcher.data?.ok ? "Move saved." : ""}</p>
         {!moving && moveFetcher.data?.error && <p role="alert" className="text-destructive">{moveFetcher.data.error}</p>}
       </div>

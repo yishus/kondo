@@ -102,12 +102,10 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
 
   return (
     <AppShell user={loaderData.currentUser}>
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-4xl">
         <header className="page-heading">
           <div>
-            <span className="eyebrow">A world of possibility</span>
             <h1>Your trips</h1>
-            <p className="page-description">Pick up where you left off or start planning somewhere new.</p>
           </div>
           <span className="trip-count"><Icon name="trips" width="15" height="15" />{loaderData.trips.length} {loaderData.trips.length === 1 ? "trip" : "trips"}</span>
         </header>
@@ -117,7 +115,7 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
           method="post"
         >
           <label className="new-trip-title" htmlFor="trip-title">
-            <Icon name="plus" />Add a new trip
+            Add a new trip
           </label>
           <div className="flex gap-2.5 max-[600px]:flex-col">
             <input
@@ -152,7 +150,6 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
 
         {loaderData.trips.length === 0 ? (
           <section className="empty-state py-16 text-center">
-            <span className="mx-auto mb-5 grid size-12 place-items-center rounded-xl bg-accent text-accent-foreground"><Icon name="compass" width="25" height="25" /></span>
             <h2 className="text-lg font-semibold">No trips yet</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
               Add a title above to create your first trip.
@@ -185,10 +182,9 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
                           key={trip.id}
                           to={`/trips/${trip.id}`}
                         >
-                          <div className="trip-preview-top"><span className="trip-preview-icon"><Icon name="compass" /></span><Icon name="arrow" className="text-muted-foreground transition group-hover:text-primary" width="17" height="17" /></div>
-                          <h3>
+                          <div className="trip-preview-title"><h3>
                             {trip.title}
-                          </h3>
+                          </h3><Icon name="arrow" className="text-muted-foreground" width="15" height="15" /></div>
                           <p className="trip-preview-date">
                             <Icon name="calendar" width="14" height="14" />
                             {formatTripDates(trip.start, trip.end)}

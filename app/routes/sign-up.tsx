@@ -57,8 +57,7 @@ export default function SignUp({ actionData, loaderData }: Route.ComponentProps)
   const [turnstileReady, setTurnstileReady] = useState(false);
   return (
     <AuthShell>
-        <p className="eyebrow">Good trips start here</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Create your account</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Create your account</h1>
         <p className="mt-2 text-sm text-muted-foreground">Kondo is in closed beta. Create an account with an allowlisted email.</p>
         <Form method="post" className="mt-7 grid gap-4">
           <input type="hidden" name="returnTo" value={loaderData.returnTo} />

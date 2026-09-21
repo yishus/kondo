@@ -4,7 +4,7 @@ import { Icon } from "./icon";
 import { ThemeToggle } from "./theme";
 
 export function Brand() {
-  return <Link to="/" className="brand" aria-label="Kondo home"><span className="brand-mark"><Icon name="compass" width="23" height="23" /></span><span>kondo<span className="brand-dot">.</span></span></Link>;
+  return <Link to="/" className="brand" aria-label="Kondo home">kondo</Link>;
 }
 
 export function AppShell({ user, trip, children }: {
@@ -23,8 +23,7 @@ export function AppShell({ user, trip, children }: {
         <div className="header-actions">
           <ThemeToggle />
           <div className="header-account">
-            <div className="user-avatar" aria-hidden="true">{user.name.trim().slice(0, 1).toUpperCase() || "K"}</div>
-            <div className="user-info"><p>{user.name}</p><span title={user.email}>{user.email}</span></div>
+            <span className="user-name" title={user.email}>{user.name}</span>
             <Form action="/sign-out" method="post"><button type="submit" className="icon-button" aria-label="Sign out" title="Sign out"><Icon name="logout" /></button></Form>
           </div>
         </div>
@@ -36,10 +35,6 @@ export function AppShell({ user, trip, children }: {
 export function AuthShell({ children }: { children: ReactNode }) {
   return <main className="auth-shell">
     <header className="auth-header"><Brand /><ThemeToggle /></header>
-    <div className="auth-layout">
-      <section className="auth-intro"><span className="eyebrow">A little planning. A world of possibility.</span><h2>Make room for<br />your next adventure.</h2><p>Bring your places, plans, and people together.<br />Your trip starts here.</p><div className="auth-route" aria-hidden="true"><Icon name="pin" /><span /><Icon name="plane" /><span /><Icon name="compass" /></div></section>
-      <section className="auth-card">{children}</section>
-    </div>
-    <p className="auth-footer">Thoughtfully planned. Freely explored.</p>
+    <section className="auth-card">{children}</section>
   </main>;
 }

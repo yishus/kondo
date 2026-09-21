@@ -32,14 +32,14 @@ export default function TripLayout({ loaderData: { trip, dates, owners, currentU
   return <AppShell user={currentUser} trip={trip}>
     <header className="page-heading">
       <div className="min-w-0">
-        <span className="eyebrow">Your next chapter</span>
         <h1>{trip.title}</h1>
         {trip.description && <p className="page-description">{trip.description}</p>}
       </div>
       <span className="trip-count"><Icon name="calendar" width="15" height="15" />{dateSubtitle}</span>
     </header>
+    <div className="trip-tools">
       <details className="owners-panel">
-        <summary><Icon name="users" width="16" height="16" /><span>Owners ({owners.length})</span><span className="ml-2 text-muted-foreground">Plan together</span><Icon name="chevron" width="14" height="14" /></summary>
+        <summary><Icon name="users" width="16" height="16" /><span>Owners ({owners.length})</span><Icon name="chevron" width="14" height="14" /></summary>
         <div className="owners-content">
         <div className="flex flex-wrap gap-2">
           {owners.map((owner) => <span key={owner.id} className="rounded-full bg-muted px-3 py-1.5 text-sm text-secondary-foreground">{owner.name}{owner.id === currentUser.id ? " (you)" : ""} · {owner.email}</span>)}
@@ -55,6 +55,7 @@ export default function TripLayout({ loaderData: { trip, dates, owners, currentU
     <nav aria-label="Trip tabs" className="trip-tabs">
       {([[base, "Itinerary", "board"], [`${base}/accommodations`, "Accommodations", "bed"], [`${base}/notes`, "Notes", "notes"]] satisfies [string, string, IconName][]).map(([to, label, icon]) => <NavLink key={to} end to={to} className="trip-tab"><Icon name={icon} width="16" height="16" />{label}</NavLink>)}
     </nav>
+    </div>
     <Outlet />
   </AppShell>;
 }

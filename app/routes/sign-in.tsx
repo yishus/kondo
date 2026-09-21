@@ -39,8 +39,7 @@ export default function SignIn({ actionData, loaderData }: Route.ComponentProps)
   const busy = navigation.state === "submitting";
   return (
     <AuthShell>
-        <p className="eyebrow">Your plans, in one place</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Welcome back</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Welcome back</h1>
         <p className="mt-2 text-sm text-muted-foreground">Sign in to see the trips you own.</p>
         <Form method="post" className="mt-7 grid gap-4">
           <input type="hidden" name="returnTo" value={loaderData.returnTo} />
