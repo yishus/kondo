@@ -43,13 +43,13 @@ export default function SignIn({ actionData, loaderData }: Route.ComponentProps)
         <p className="mt-2 text-sm text-muted-foreground">Sign in to see the trips you own.</p>
         <Form method="post" className="mt-7 grid gap-4">
           <input type="hidden" name="returnTo" value={loaderData.returnTo} />
-          <label className="grid gap-1.5 text-sm font-semibold">
+          <label className="ui-field">
             Email
-            <input className="h-11 rounded-[10px] border border-input px-3 font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" name="email" type="email" autoComplete="email" required />
+            <input className="ui-input" name="email" type="email" autoComplete="email" required />
           </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
+          <label className="ui-field">
             Password
-            <input className="h-11 rounded-[10px] border border-input px-3 font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" name="password" type="password" autoComplete="current-password" required />
+            <input className="ui-input" name="password" type="password" autoComplete="current-password" required />
           </label>
           {actionData?.error && <p role="alert" className="rounded-lg bg-destructive-soft px-3 py-2 text-sm font-medium text-destructive">{actionData.error}</p>}
           <button className="h-11 rounded-[10px] bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>

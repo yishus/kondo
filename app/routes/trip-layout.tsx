@@ -5,13 +5,18 @@ import type { Route } from "./+types/trip-layout";
 import type { action as ownersAction } from "./trip-owners";
 import { requireTripOwner } from "../auth.server";
 import { getDb } from "../db.server";
+import { getTripPage, isTripBoardRequest } from "../trip-page.server";
 import { tripDays, trips } from "../db/schema";
 import { formatTripDates } from "../trip-dates";
 import { listTripOwners } from "../trip-owners.server";
 import { AppShell } from "../components/app-shell";
 import { Icon, type IconName } from "../components/icon";
 
-export async function loader({ params, request }: Route.LoaderArgs) {
+export async function loader({ params, request, context }: Route.LoaderArgs) {
+  if (isTripBoardRequest(request, params.tripId)) {
+    const { trip, dates, owners, currentUser } = await getTripPage(context, request, params.tripId);
+    return { trip, dates, owners, currentUser };
+  }
   const db = getDb(env.DB);
   const currentUser = await requireTripOwner(request, db, params.tripId);
   const [[trip], [dates], owners] = await Promise.all([
@@ -45,8 +50,8 @@ export default function TripLayout({ loaderData: { trip, dates, owners, currentU
           {owners.map((owner) => <span key={owner.id} className="rounded-full bg-muted px-3 py-1.5 text-sm text-secondary-foreground">{owner.name}{owner.id === currentUser.id ? " (you)" : ""} · {owner.email}</span>)}
         </div>
         <ownerFetcher.Form action={`${base}/owners`} method="post" className="mt-4 flex flex-wrap items-end gap-2">
-          <label className="grid min-w-0 flex-1 basis-64 gap-1.5 text-sm font-semibold">Add an owner by account email<input className="h-10 rounded-[10px] border border-input px-3 font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" name="email" type="email" autoComplete="email" required disabled={ownerFetcher.state !== "idle"} /></label>
-          <button className="h-10 rounded-[10px] bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60" type="submit" disabled={ownerFetcher.state !== "idle"}>{ownerFetcher.state === "idle" ? "Add owner" : "Adding…"}</button>
+          <label className="ui-field flex-1 basis-64">Add an owner by account email<input className="ui-input" name="email" type="email" autoComplete="email" required disabled={ownerFetcher.state !== "idle"} /></label>
+          <button className="ui-button ui-button-primary" type="submit" disabled={ownerFetcher.state !== "idle"}>{ownerFetcher.state === "idle" ? "Add owner" : "Adding…"}</button>
         </ownerFetcher.Form>
         {ownerError && <p role="alert" className="mt-2 text-sm font-medium text-destructive">{ownerError}</p>}
         {ownerFetcher.data?.ok && <p role="status" className="mt-2 text-sm font-medium text-success">Owner added.</p>}

@@ -119,7 +119,7 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
           </label>
           <div className="flex gap-2.5 max-[600px]:flex-col">
             <input
-              className="h-11 min-w-0 flex-1 rounded-[10px] border border-input bg-surface px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 aria-invalid:border-destructive"
+              className="ui-input flex-1"
               id="trip-title"
               name="title"
               type="text"
@@ -131,7 +131,7 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
               disabled={busy}
             />
             <button
-              className="h-11 rounded-[10px] bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="ui-button ui-button-primary"
               type="submit"
               disabled={busy}
             >

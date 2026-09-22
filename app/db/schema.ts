@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   check,
   index,
@@ -297,3 +297,46 @@ export const tripTodos = sqliteTable("trip_todos", {
   index("trip_todos_trip_idx").on(table.tripId),
   check("trip_todos_title_check", sql`length(trim(${table.title})) > 0 AND length(${table.title}) <= 500`),
 ]);
+
+// Relational queries aggregate each collection in SQL without multiplying rows.
+export const userRelations = relations(user, ({ many }) => ({
+  sessions: many(session),
+  accounts: many(account),
+}));
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, { fields: [session.userId], references: [user.id] }),
+}));
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, { fields: [account.userId], references: [user.id] }),
+}));
+export const tripRelations = relations(trips, ({ many }) => ({
+  owners: many(tripOwners),
+  days: many(tripDays),
+  cards: many(cards),
+  places: many(accommodationPlaces),
+}));
+export const tripOwnerRelations = relations(tripOwners, ({ one }) => ({
+  trip: one(trips, { fields: [tripOwners.tripId], references: [trips.id] }),
+  user: one(user, { fields: [tripOwners.userId], references: [user.id] }),
+}));
+export const tripDayRelations = relations(tripDays, ({ one }) => ({
+  trip: one(trips, { fields: [tripDays.tripId], references: [trips.id] }),
+}));
+export const cardRelations = relations(cards, ({ one, many }) => ({
+  trip: one(trips, { fields: [cards.tripId], references: [trips.id] }),
+  attachments: many(cardAttachments),
+  cityLocations: many(cityCardLocations),
+}));
+export const cardAttachmentRelations = relations(cardAttachments, ({ one }) => ({
+  card: one(cards, { fields: [cardAttachments.cardId], references: [cards.id] }),
+}));
+export const cityCardLocationRelations = relations(cityCardLocations, ({ one }) => ({
+  card: one(cards, { fields: [cityCardLocations.cardId], references: [cards.id] }),
+}));
+export const accommodationPlaceRelations = relations(accommodationPlaces, ({ one, many }) => ({
+  trip: one(trips, { fields: [accommodationPlaces.tripId], references: [trips.id] }),
+  accommodations: many(accommodations),
+}));
+export const accommodationRelations = relations(accommodations, ({ one }) => ({
+  place: one(accommodationPlaces, { fields: [accommodations.placeId], references: [accommodationPlaces.id] }),
+}));

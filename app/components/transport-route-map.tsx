@@ -263,17 +263,17 @@ export function TransportRouteMap({
   useEffect(() => setClientReady(true), []);
 
   return (
-    <section className="grid gap-3 rounded-[12px] border border-info-border bg-info-soft p-4" aria-labelledby="transport-route-heading">
+    <section className="ui-section" aria-labelledby="transport-route-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-foreground" id="transport-route-heading">Google Maps route</h3>
+          <h3 className="ui-label" id="transport-route-heading">Google Maps route</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             Uses the trip day and {departureTime ? "departure" : "arrival"} time in {plan.ok ? plan.timeZone : "your device’s time zone"}.
           </p>
         </div>
         <button
           type="button"
-          className="h-9 cursor-pointer rounded-[9px] bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:bg-input"
+          className="ui-button ui-button-outline"
           disabled={!apiKey || !origin.trim() || !destination.trim() || !plan.ok}
           onClick={() => setAttempt({ id: (attempt?.id ?? 0) + 1, signature })}
         >

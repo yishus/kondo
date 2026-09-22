@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { useEffect, useRef, useState } from "react";
 import { data, Link, useFetcher } from "react-router";
 import { v7 as uuidv7 } from "uuid";
@@ -7,9 +7,11 @@ import { v7 as uuidv7 } from "uuid";
 import type { Route } from "./+types/trip";
 import { requireTripOwner } from "../auth.server";
 import { getDb } from "../db.server";
-import { accommodations, accommodationPlaces, cards, cardAttachments, cityCardLocations, tripDays, trips } from "../db/schema";
+import { getTripPage } from "../trip-page.server";
+import { streamTripPhotos } from "../trip-photos.server";
+import { cards, cityCardLocations, tripDays, trips } from "../db/schema";
 import { cardTypes, locationCategories, transportModes, readCardDetails, type CardType } from "../card-types";
-import { googleMapsUrl, readCardLocation, type CardLocation } from "../card-location";
+import { readCardLocation, type CardLocation } from "../card-location";
 import { readCityLocations } from "../city-locations";
 import { CityLocationsEditor } from "../components/city-locations-editor";
 import { CityLocationsMap } from "../components/city-locations-map";
@@ -63,92 +65,15 @@ function formatTripDate(date: string) {
   return dateFormatter.format(new Date(`${date}T00:00:00`));
 }
 
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
-
-  const tripRows = await db
-    .select()
-    .from(trips)
-    .where(eq(trips.id, params.tripId))
-    .limit(1);
-  const trip = tripRows[0];
-
-  if (!trip) {
-    throw new Response("Trip not found", { status: 404 });
-  }
-
-  const [dayRows, cardRows, attachmentRows, cityLocationRows, stayRows] = await Promise.all([
-    db
-      .select({ id: tripDays.id, date: tripDays.tripDate })
-      .from(tripDays)
-      .where(eq(tripDays.tripId, trip.id))
-      .orderBy(asc(tripDays.tripDate)),
-    db
-      .select()
-      .from(cards)
-      .where(eq(cards.tripId, trip.id))
-      .orderBy(asc(cards.position), asc(cards.id)),
-    db.select({ attachment: cardAttachments }).from(cardAttachments)
-      .innerJoin(cards, eq(cards.id, cardAttachments.cardId))
-      .where(eq(cards.tripId, trip.id))
-      .orderBy(asc(cardAttachments.createdAt), asc(cardAttachments.id)),
-    db.select({ location: cityCardLocations }).from(cityCardLocations)
-      .innerJoin(cards, eq(cards.id, cityCardLocations.cardId))
-      .where(eq(cards.tripId, trip.id))
-      .orderBy(asc(cityCardLocations.position), asc(cityCardLocations.id)),
-    db.select({ accommodation: accommodations, placeName: accommodationPlaces.name })
-      .from(accommodations)
-      .innerJoin(accommodationPlaces, eq(accommodations.placeId, accommodationPlaces.id))
-      .where(and(eq(accommodationPlaces.tripId, trip.id), isNotNull(accommodations.confirmedOptionId)))
-      .orderBy(asc(accommodations.name), asc(accommodations.id)),
-  ]);
-
-  const cardsByDay = new Map<string, TripCard[]>();
-
-  for (const { cityGroupId: _legacyGroupId, ...card } of cardRows) {
-    const columnId = card.tripDayId ?? UNSCHEDULED_COLUMN_ID;
-    const cards = cardsByDay.get(columnId) ?? [];
-    cards.push({
-      ...card,
-      tripDayId: columnId,
-      attachments: attachmentRows.filter(({ attachment }) => attachment.cardId === card.id).map(({ attachment }) => attachment),
-      cityLocations: cityLocationRows.filter(({ location }) => location.cardId === card.id).map(({ location }) => location),
-    });
-    cardsByDay.set(columnId, cards);
-  }
-
-  const tripColumns: TripColumn[] = dayRows.map((day) => ({
-    id: day.id,
-    date: day.date,
-    cards: cardsByDay.get(day.id) ?? [],
-  }));
-
-  tripColumns.unshift({
-    id: UNSCHEDULED_COLUMN_ID,
-    date: null,
-    cards: cardsByDay.get(UNSCHEDULED_COLUMN_ID) ?? [],
-  });
-
-  const confirmedStays = stayRows.flatMap(({ accommodation, placeName }) => {
-    const dates = accommodation.dateOptions.find((option) => option.id === accommodation.confirmedOptionId);
-    if (!dates) return [];
-    const query = accommodation.googleMapsQuery || `${accommodation.name}, ${placeName}`;
-    return [{
-      id: accommodation.id,
-      name: accommodation.name,
-      checkIn: dates.checkIn,
-      checkOut: dates.checkOut,
-      mapsUrl: accommodation.googlePlaceId
-        ? googleMapsUrl(accommodation.googlePlaceId, query)
-        : `https://www.google.com/maps/search/?${new URLSearchParams({ api: "1", query })}`,
-    }];
-  });
-
-  const googleMapsBrowserApiKey = (env as typeof env & { GOOGLE_MAPS_BROWSER_API_KEY?: string })
-    .GOOGLE_MAPS_BROWSER_API_KEY?.trim() ?? "";
-
-  return { trip, tripColumns, confirmedStays, googleMapsBrowserApiKey };
+export async function loader({ params, request, context }: Route.LoaderArgs) {
+  const { trip, tripColumns, confirmedStays } = await getTripPage(context, request, params.tripId);
+  const mapsEnv = env as typeof env & { GOOGLE_MAPS_BROWSER_API_KEY?: string; GOOGLE_MAPS_API_KEY?: string };
+  return {
+    trip,
+    tripColumns: streamTripPhotos(tripColumns, mapsEnv.GOOGLE_MAPS_API_KEY, request.signal),
+    confirmedStays,
+    googleMapsBrowserApiKey: mapsEnv.GOOGLE_MAPS_BROWSER_API_KEY?.trim() ?? "",
+  };
 }
 
 export async function action({ params, request }: Route.ActionArgs) {
@@ -412,7 +337,7 @@ function UnscheduledColumn({ column, onAddCard, onOpenCard, moving }: {
           {column.cards.length === 0 && (
             <p className="mb-2 rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">Drop cards here to plan them later.</p>
           )}
-          <button className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary w-full text-left text-secondary-foreground" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
+          <button className="ui-button w-full justify-start text-left" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
             <span aria-hidden="true">＋</span> Add card
           </button>
         </CardDropSlot>
@@ -462,7 +387,7 @@ function DayColumn({
           label={`End of ${formatTripDate(column.date)}`}
           disabled={moving}
         >
-          <button className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary w-full text-left text-secondary-foreground" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
+          <button className="ui-button w-full justify-start text-left" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
             <span aria-hidden="true">＋</span> Add card
           </button>
         </CardDropSlot>
@@ -518,12 +443,12 @@ function DayColumn({
       {renderCards()}
     </section>
     {confirmedStays.filter((stay) => stay.checkIn <= displayedDate && displayedDate < stay.checkOut).map((stay) => (
-      <article key={stay.id} aria-label={`Confirmed accommodation: ${stay.name}`} className="rounded-[14px] border border-success-border bg-success-soft p-4">
-        <p className="mb-2 text-xs font-semibold tracking-wide text-success">CONFIRMED STAY</p>
-        <h3 className="font-semibold break-words">{stay.name}</h3>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-primary">
+      <article key={stay.id} aria-label={`Confirmed accommodation: ${stay.name}`} className="accommodation-card">
+        <p className="accommodation-kind"><Icon name="bed" width="13" height="13" />Confirmed stay</p>
+        <h3 className="mt-2 text-[13px] font-medium break-words">{stay.name}</h3>
+        <div className="stay-card-footer text-xs text-secondary-foreground">
           <a href={stay.mapsUrl} target="_blank" rel="noreferrer" draggable={false} className="hover:underline">Google Maps ↗</a>
-          <Link to={`/trips/${encodeURIComponent(tripId)}/accommodations?edit=${encodeURIComponent(stay.id)}`} draggable={false} aria-label={`Edit ${stay.name}`} className="rounded-lg px-3 py-2 hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Edit</Link>
+          <Link to={`/trips/${encodeURIComponent(tripId)}/accommodations?edit=${encodeURIComponent(stay.id)}`} draggable={false} aria-label={`Edit ${stay.name}`} className="ui-button">Edit</Link>
         </div>
       </article>
     ))}
@@ -684,7 +609,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             Add a day
           </label>
           <input
-            className="h-10 rounded-[10px] border border-input bg-surface px-3 text-sm text-foreground shadow-[0_1px_2px_rgb(9_30_66_/_8%)] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 aria-invalid:border-destructive"
+            className="ui-input"
             id="trip-date"
             name="date"
             type="date"
@@ -698,7 +623,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           />
         </div>
         <button
-          className="h-10 rounded-[10px] bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:bg-input"
+          className="ui-button ui-button-primary"
           type="submit"
           disabled={
             !selectedDate ||
@@ -744,26 +669,25 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
       {activeCard && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-overlay/60 p-4 backdrop-blur-[2px]"
+          className="dialog-overlay"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeCard();
           }}
         >
           <section
-            className={`max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-2xl bg-surface p-6 shadow-[0_20px_48px_rgb(9_30_66_/_30%)] ${cardDraft.type === "transport" ? "max-w-3xl" : "max-w-xl"}`}
+            className={`ui-dialog ${cardDraft.type === "transport" ? "max-w-2xl" : "max-w-lg"}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="card-dialog-heading"
           >
-            <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="ui-dialog-header">
               <h2
-                className="text-xl font-semibold tracking-[-0.02em]"
                 id="card-dialog-heading"
               >
                 {activeCard.mode === "create" ? "Add card" : "Card details"}
               </h2>
               <button
-                className="grid size-8 cursor-pointer place-items-center rounded-full text-2xl leading-none text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+                className="icon-button ui-dialog-close"
                 type="button"
                 aria-label={
                   activeCard.mode === "create"
@@ -777,7 +701,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </div>
 
             <cardFetcher.Form
-              className="grid gap-5"
+              className="ui-form"
               method="post"
               encType="multipart/form-data"
               onSubmit={() => {
@@ -803,9 +727,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 <input name="cardId" type="hidden" value={activeCard.cardId} />
               )}
 
-              <label className="grid min-w-0 gap-1.5 text-sm font-semibold">
+              <label className="ui-field">
                 Card type
-                <select className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" value={cardDraft.type} disabled={activeCard.mode === "edit"}
+                <select className="ui-input" value={cardDraft.type} disabled={activeCard.mode === "edit"}
                   onChange={(event) => setCardDraft((draft) => ({ ...draft, type: event.target.value as CardType }))}>
                   {Object.entries(cardTypes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
@@ -813,22 +737,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               </label>
 
               {cardDraft.type === "transport" && <>
-                <label className="grid min-w-0 gap-1.5 text-sm font-semibold">Mode of transport
-                  <select className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" name="transportMode" value={cardDraft.transportMode} onChange={(event) => setCardDraft((draft) => ({ ...draft, transportMode: event.target.value }))}>
+                <label className="ui-field">Mode of transport
+                  <select className="ui-input" name="transportMode" value={cardDraft.transportMode} onChange={(event) => setCardDraft((draft) => ({ ...draft, transportMode: event.target.value }))}>
                     {Object.entries(transportModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
                 {([ ["startLocation", "Start location"], ["endLocation", "End location"] ] as const).map(([field, label]) => (
-                  <label key={field} className="grid min-w-0 gap-1.5 text-sm font-semibold">{label}
-                    <input className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" name={field} required value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
+                  <label key={field} className="ui-field">{label}
+                    <input className="ui-input" name={field} required value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
                   </label>
                 ))}
                 <details>
-                  <summary className="cursor-pointer text-sm font-semibold text-secondary-foreground">Times and service details</summary>
+                  <summary className="ui-label cursor-pointer">Times and service details</summary>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     {([ ["departureTime", "Departure time"], ["arrivalTime", "Arrival time"], ["serviceNumber", "Service number"] ] as const).map(([field, label]) => (
-                      <label key={field} className="grid min-w-0 gap-1.5 text-sm font-semibold">{label}
-                        <input className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" name={field} type={field === "serviceNumber" ? "text" : "time"} value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
+                      <label key={field} className="ui-field">{label}
+                        <input className="ui-input" name={field} type={field === "serviceNumber" ? "text" : "time"} value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
                       </label>
                     ))}
                   </div>
@@ -849,11 +773,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
               {cardDraft.type !== "transport" && (
               <div className="grid gap-1.5">
-                <label className="text-sm font-semibold" htmlFor="card-title">
+                <label className="ui-label" htmlFor="card-title">
                   {cardDraft.type === "city" ? "City / area / region name" : "Title"}
                 </label>
                 <input
-                  className="rounded-[10px] border border-input px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="ui-input"
                   id="card-title"
                   name="title"
                   ref={titleInputRef}
@@ -871,10 +795,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               )}
 
               {cardDraft.type === "location" && (
-                <label className="grid min-w-0 gap-1.5 text-sm font-semibold">
+                <label className="ui-field">
                   Subcategory
                   <select
-                    className="min-w-0 w-full rounded-[10px] border border-input bg-surface px-3 py-2.5 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    className="ui-input"
                     name="locationCategory"
                     value={cardDraft.locationCategory}
                     onChange={(event) => setCardDraft((draft) => ({ ...draft, locationCategory: event.target.value }))}
@@ -905,13 +829,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               {cardDraft.type !== "city" && <>
               <div className="grid gap-1.5">
                 <label
-                  className="text-sm font-semibold"
+                  className="ui-label"
                   htmlFor="card-description"
                 >
                   Description
                 </label>
                 <textarea
-                  className="min-h-32 resize-y rounded-[10px] border border-input px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="ui-input min-h-32 resize-y"
                   id="card-description"
                   name="description"
                   value={cardDraft.description}
@@ -939,22 +863,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 </p>
               )}
 
-              <div className="flex flex-wrap justify-end gap-2.5 border-t border-border pt-4">
+              <div className="ui-form-footer">
                 {activeCard.mode === "edit" && (
-                  <button type="button" className="mr-auto h-10 cursor-pointer rounded-[10px] px-3 text-sm font-semibold text-destructive hover:bg-destructive-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive disabled:cursor-wait disabled:opacity-50"
+                  <button type="button" className="ui-button ui-button-danger mr-auto"
                     disabled={cardFetcher.state !== "idle"} onClick={confirmDeleteCard}>
                     {cardFetcher.state !== "idle" && cardFetcher.formData?.get("intent") === "delete-card" ? "Deleting…" : "Delete card"}
                   </button>
                 )}
                 <button
-                  className="h-10 cursor-pointer rounded-[10px] px-4 text-sm font-semibold text-secondary-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  className="ui-button"
                   type="button"
                   onClick={closeCard}
                 >
                   Cancel
                 </button>
                 <button
-                  className="h-10 cursor-pointer rounded-[10px] bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:bg-input"
+                  className="ui-button ui-button-primary"
                   type="submit"
                   disabled={
                     (cardDraft.type === "transport" ? !cardDraft.startLocation.trim() || !cardDraft.endLocation.trim() : !cardDraft.title.trim()) || cardFetcher.state !== "idle"

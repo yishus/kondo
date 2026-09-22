@@ -61,17 +61,17 @@ export default function SignUp({ actionData, loaderData }: Route.ComponentProps)
         <p className="mt-2 text-sm text-muted-foreground">Kondo is in closed beta. Create an account with an allowlisted email.</p>
         <Form method="post" className="mt-7 grid gap-4">
           <input type="hidden" name="returnTo" value={loaderData.returnTo} />
-          <label className="grid gap-1.5 text-sm font-semibold">
+          <label className="ui-field">
             Name
-            <input className="h-11 rounded-[10px] border border-input px-3 font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" name="name" autoComplete="name" maxLength={100} required />
+            <input className="ui-input" name="name" autoComplete="name" maxLength={100} required />
           </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
+          <label className="ui-field">
             Email
-            <input className="h-11 rounded-[10px] border border-input px-3 font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" name="email" type="email" autoComplete="email" required />
+            <input className="ui-input" name="email" type="email" autoComplete="email" required />
           </label>
           <div className="grid gap-1.5 text-sm">
             <label className="font-semibold" htmlFor="sign-up-password">Password</label>
-            <input id="sign-up-password" aria-describedby="password-help" className="h-11 rounded-[10px] border border-input px-3 font-normal outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" name="password" type="password" autoComplete="new-password" minLength={8} maxLength={128} required />
+            <input id="sign-up-password" aria-describedby="password-help" className="ui-input" name="password" type="password" autoComplete="new-password" minLength={8} maxLength={128} required />
             <span id="password-help" className="text-muted-foreground">At least 8 characters.</span>
           </div>
           {loaderData.turnstileSiteKey ? (

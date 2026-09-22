@@ -49,6 +49,7 @@ export function createAuth(
       },
     },
     advanced: {
+      database: { joins: true },
       ipAddress: {
         ipAddressHeaders: ["cf-connecting-ip"],
       },

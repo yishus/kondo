@@ -64,21 +64,21 @@ export function CardLocationPicker({ tripId, location, onChange, disabled }: {
   }
 
   return (
-    <fieldset className="grid min-w-0 gap-2" disabled={disabled}>
-      <legend className="mb-2 text-sm font-semibold">Google Maps location <span className="font-normal text-muted-foreground">(optional)</span></legend>
+    <fieldset className="ui-section" disabled={disabled}>
+      <legend className="ui-label">Google Maps location <span className="font-normal text-muted-foreground">(optional)</span></legend>
       <input type="hidden" name="googlePlaceId" value={location.googlePlaceId ?? ""} />
       <input type="hidden" name="googleMapsQuery" value={location.googleMapsQuery ?? ""} />
       {location.googlePlaceId && (
-        <div className="rounded-[10px] border border-success-border bg-success-soft p-3">
+        <div className="ui-saved-item">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 text-sm">
-              <p className="font-semibold break-words">{selected?.name ?? "Location added"}</p>
+            <div className="min-w-0 text-xs">
+              <p className="font-medium break-words">{selected?.name ?? "Location added"}</p>
               {selected?.address && <p className="mt-1 text-xs break-words text-muted-foreground">{selected.address}</p>}
-              <a className="mt-1 inline-block font-semibold text-primary hover:underline" href={googleMapsUrl(location.googlePlaceId, location.googleMapsQuery ?? "Location")} target="_blank" rel="noopener noreferrer">
+              <a className="mt-1 inline-block text-secondary-foreground hover:underline" href={googleMapsUrl(location.googlePlaceId, location.googleMapsQuery ?? "Location")} target="_blank" rel="noopener noreferrer">
                 View on Google Maps <span aria-hidden="true">↗</span>
               </a>
             </div>
-            <button type="button" className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary shrink-0 text-secondary-foreground" onClick={() => {
+            <button type="button" className="ui-button shrink-0" onClick={() => {
               onChange({ googlePlaceId: null, googleMapsQuery: null });
               setSelected(null);
               clearSearch();
@@ -87,12 +87,12 @@ export function CardLocationPicker({ tripId, location, onChange, disabled }: {
           {selected && <><PlaceAttributions place={selected} /><GoogleMapsAttribution /></>}
         </div>
       )}
-      <label className="text-xs font-semibold text-secondary-foreground" htmlFor={id}>
+      <label className="ui-label" htmlFor={id}>
         {location.googlePlaceId ? "Search for a different place" : "Search for a place"}
       </label>
       <div className="flex gap-2">
         <input id={id} type="search" value={query} maxLength={200} autoComplete="off"
-          className="min-w-0 flex-1 rounded-[10px] border border-input px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+          className="ui-input flex-1"
           placeholder="e.g. Ghibli Museum, Tokyo" aria-describedby={`${id}-hint`}
           onChange={(event) => { clearSearch(); setQuery(event.target.value); }}
           onKeyDown={(event) => {
@@ -102,7 +102,7 @@ export function CardLocationPicker({ tripId, location, onChange, disabled }: {
             }
           }}
         />
-        <button type="button" className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary bg-accent text-primary disabled:cursor-not-allowed disabled:opacity-50" disabled={searching || query.trim().length < 2} onClick={() => void search()}>
+        <button type="button" className="ui-button ui-button-outline" disabled={searching || query.trim().length < 2} onClick={() => void search()}>
           {searching ? "Searching…" : "Search"}
         </button>
       </div>
@@ -112,11 +112,11 @@ export function CardLocationPicker({ tripId, location, onChange, disabled }: {
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {results && results.length > 0 && (
-        <div className="rounded-[10px] border border-border bg-background p-2">
+        <div className="rounded-md border border-border p-1">
           <ul aria-label="Location search results" className="max-h-52 overflow-y-auto">
             {results.map((place) => (
               <li key={place.id} className="border-b border-border last:border-b-0">
-                <button type="button" className="cursor-pointer rounded-[10px] px-3 py-2.5 text-sm font-semibold hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary w-full text-left" onClick={() => {
+                <button type="button" className="ui-button block w-full text-left" onClick={() => {
                   onChange({ googlePlaceId: place.id, googleMapsQuery: query.trim() });
                   setSelected(place);
                   clearSearch();
