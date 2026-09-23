@@ -309,11 +309,13 @@ export const sessionRelations = relations(session, ({ one }) => ({
 export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, { fields: [account.userId], references: [user.id] }),
 }));
-export const tripRelations = relations(trips, ({ many }) => ({
+export const tripRelations = relations(trips, ({ one, many }) => ({
   owners: many(tripOwners),
   days: many(tripDays),
   cards: many(cards),
   places: many(accommodationPlaces),
+  notes: one(tripNotes),
+  todos: many(tripTodos),
 }));
 export const tripOwnerRelations = relations(tripOwners, ({ one }) => ({
   trip: one(trips, { fields: [tripOwners.tripId], references: [trips.id] }),
@@ -339,4 +341,14 @@ export const accommodationPlaceRelations = relations(accommodationPlaces, ({ one
 }));
 export const accommodationRelations = relations(accommodations, ({ one }) => ({
   place: one(accommodationPlaces, { fields: [accommodations.placeId], references: [accommodationPlaces.id] }),
+  document: one(accommodationDocuments, { fields: [accommodations.id], references: [accommodationDocuments.accommodationId] }),
+}));
+export const accommodationDocumentRelations = relations(accommodationDocuments, ({ one }) => ({
+  accommodation: one(accommodations, { fields: [accommodationDocuments.accommodationId], references: [accommodations.id] }),
+}));
+export const tripNotesRelations = relations(tripNotes, ({ one }) => ({
+  trip: one(trips, { fields: [tripNotes.tripId], references: [trips.id] }),
+}));
+export const tripTodoRelations = relations(tripTodos, ({ one }) => ({
+  trip: one(trips, { fields: [tripTodos.tripId], references: [trips.id] }),
 }));

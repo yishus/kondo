@@ -4,7 +4,8 @@ import { data, useFetcher, useSearchParams } from "react-router";
 import type { Route } from "./+types/accommodations";
 import { requireTripOwner } from "../auth.server";
 import { getDb } from "../db.server";
-import { accommodationAction, loadAccommodations } from "../accommodations.server";
+import { accommodationAction } from "../accommodations.server";
+import { getAccommodationsPage } from "../trip-page.server";
 import { currencies, money, stayNights, type StayOption } from "../accommodations";
 import type { Accommodation, AccommodationDocument } from "../db/schema";
 import { CardLocationPicker } from "../components/card-location";
@@ -12,10 +13,9 @@ import { googleMapsUrl, type CardLocation } from "../card-location";
 import { formatFileSize } from "../attachments";
 import { Icon } from "../components/icon";
 
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
-  return { ...await loadAccommodations(db, params.tripId), tripId: params.tripId };
+export async function loader({ params, request, context }: Route.LoaderArgs) {
+  const { places } = await getAccommodationsPage(context, request, params.tripId);
+  return { places, tripId: params.tripId };
 }
 export async function action({ params, request }: Route.ActionArgs) {
   const db = getDb(env.DB);

@@ -1,23 +1,17 @@
 import { env } from "cloudflare:workers";
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { useEffect, useRef, useState } from "react";
 import { data, useFetcher } from "react-router";
 import { v7 as uuidv7 } from "uuid";
 import type { Route } from "./+types/notes";
 import { requireTripOwner } from "../auth.server";
 import { getDb } from "../db.server";
+import { getNotesPage } from "../trip-page.server";
 import { tripNotes, tripTodos, trips } from "../db/schema";
 
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
-  const [[trip], [notes], todos] = await Promise.all([
-    db.select({ id: trips.id }).from(trips).where(eq(trips.id, params.tripId)).limit(1),
-    db.select().from(tripNotes).where(eq(tripNotes.tripId, params.tripId)).limit(1),
-    db.select().from(tripTodos).where(eq(tripTodos.tripId, params.tripId)).orderBy(asc(tripTodos.id)),
-  ]);
-  if (!trip) throw new Response("Trip not found", { status: 404 });
-  return { tripId: trip.id, notes: notes?.body ?? "", todos };
+export async function loader({ params, request, context }: Route.LoaderArgs) {
+  const { tripId, notes, todos } = await getNotesPage(context, request, params.tripId);
+  return { tripId, notes, todos };
 }
 
 export async function action({ params, request }: Route.ActionArgs) {

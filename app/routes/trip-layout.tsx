@@ -5,7 +5,7 @@ import type { Route } from "./+types/trip-layout";
 import type { action as ownersAction } from "./trip-owners";
 import { requireTripOwner } from "../auth.server";
 import { getDb } from "../db.server";
-import { getTripPage, isTripBoardRequest } from "../trip-page.server";
+import { getAccommodationsPage, getNotesPage, getTripPage, isAccommodationsRequest, isNotesRequest, isTripBoardRequest } from "../trip-page.server";
 import { tripDays, trips } from "../db/schema";
 import { formatTripDates } from "../trip-dates";
 import { listTripOwners } from "../trip-owners.server";
@@ -15,6 +15,14 @@ import { Icon, type IconName } from "../components/icon";
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   if (isTripBoardRequest(request, params.tripId)) {
     const { trip, dates, owners, currentUser } = await getTripPage(context, request, params.tripId);
+    return { trip, dates, owners, currentUser };
+  }
+  if (isAccommodationsRequest(request, params.tripId)) {
+    const { trip, dates, owners, currentUser } = await getAccommodationsPage(context, request, params.tripId);
+    return { trip, dates, owners, currentUser };
+  }
+  if (isNotesRequest(request, params.tripId)) {
+    const { trip, dates, owners, currentUser } = await getNotesPage(context, request, params.tripId);
     return { trip, dates, owners, currentUser };
   }
   const db = getDb(env.DB);
