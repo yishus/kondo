@@ -23,7 +23,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   return new Response(object.body, { headers: {
     "Content-Type": file.contentType,
     "Content-Length": String(file.size),
-    "Content-Disposition": `${disposition}; filename="attachment.${file.contentType === "application/pdf" ? "pdf" : "jpg"}"; filename*=UTF-8''${filename}`,
+    "Content-Disposition": `${disposition}; filename="attachment.${file.contentType === "application/gpx+xml" ? "gpx" : file.contentType === "application/pdf" ? "pdf" : file.contentType === "image/png" ? "png" : "jpg"}"; filename*=UTF-8''${filename}`,
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy": "sandbox",

@@ -7,11 +7,16 @@ import type { Route } from "./+types/notes";
 import { requireTripOwner } from "../auth.server";
 import { getDb } from "../db.server";
 import { getNotesPage } from "../trip-page.server";
-import { tripNotes, tripTodos, trips } from "../db/schema";
+import { tripNotes, tripOwners, tripTodos, trips } from "../db/schema";
+import { listTripOwners } from "../trip-owners.server";
+import { parseTodoMentions } from "../todo-mentions";
+import { TodoMentionInput } from "../components/todo-mention-input";
+import { TodoPerson } from "../components/todo-person";
+import { MarkdownEditor } from "../components/markdown-editor";
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
-  const { tripId, notes, todos } = await getNotesPage(context, request, params.tripId);
-  return { tripId, notes, todos };
+  const { tripId, notes, todos, owners } = await getNotesPage(context, request, params.tripId);
+  return { tripId, notes, todos, owners };
 }
 
 export async function action({ params, request }: Route.ActionArgs) {
@@ -24,6 +29,12 @@ export async function action({ params, request }: Route.ActionArgs) {
     const form = await request.formData();
     const get = (key: string) => typeof form.get(key) === "string" ? form.get(key) as string : "";
     const intent = get("intent");
+    const ownerId = get("ownerId") || null;
+    if ((intent === "add-todo" || intent === "tag-todo") && ownerId) {
+      const [owner] = await db.select({ userId: tripOwners.userId }).from(tripOwners)
+        .where(and(eq(tripOwners.tripId, trip.id), eq(tripOwners.userId, ownerId))).limit(1);
+      if (!owner) return fail("Choose an owner of this trip.");
+    }
 
     if (intent === "save-notes") {
       const body = get("notes");
@@ -31,9 +42,15 @@ export async function action({ params, request }: Route.ActionArgs) {
       await db.insert(tripNotes).values({ tripId: trip.id, body })
         .onConflictDoUpdate({ target: tripNotes.tripId, set: { body } });
     } else if (intent === "add-todo") {
-      const title = get("title").trim();
+      const { title, ownerIds } = parseTodoMentions(get("title"), await listTripOwners(db, trip.id));
+      if (ownerIds.length > 1) return fail("Tag one person per to-do. Remove the extra mentions and try again.");
       if (!title || title.length > 500) return fail("Enter a to-do (up to 500 characters).");
-      await db.insert(tripTodos).values({ id: uuidv7(), tripId: trip.id, title });
+      await db.insert(tripTodos).values({ id: uuidv7(), tripId: trip.id, title, ownerId: ownerIds[0] ?? ownerId });
+    } else if (intent === "tag-todo") {
+      const changed = await db.update(tripTodos).set({ ownerId })
+        .where(and(eq(tripTodos.id, get("todoId")), eq(tripTodos.tripId, trip.id)))
+        .returning({ id: tripTodos.id });
+      if (!changed.length) return fail("That to-do no longer exists.", 404);
     } else if (intent === "toggle-todo" || intent === "delete-todo") {
       const condition = and(eq(tripTodos.id, get("todoId")), eq(tripTodos.tripId, trip.id));
       if (intent === "toggle-todo" && !["true", "false"].includes(get("completed"))) return fail("Choose whether this to-do is complete.");
@@ -52,22 +69,27 @@ export async function action({ params, request }: Route.ActionArgs) {
 
 export function meta() { return [{ title: "Notes · Kondo" }]; }
 
-const input = "ui-input";
 const button = "ui-button";
 const primary = "ui-button ui-button-primary";
 const panel = "notes-panel";
 
-function TodoItem({ todo }: { todo: Route.ComponentProps["loaderData"]["todos"][number] }) {
+type Owners = Route.ComponentProps["loaderData"]["owners"];
+
+function TodoItem({ todo, owners }: { todo: Route.ComponentProps["loaderData"]["todos"][number]; owners: Owners }) {
   const fetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
   const completed = busy && fetcher.formData?.get("intent") === "toggle-todo"
     ? fetcher.formData.get("completed") === "true" : todo.completed;
+  const ownerId = busy && fetcher.formData?.get("intent") === "tag-todo"
+    ? String(fetcher.formData.get("ownerId") ?? "") : todo.ownerId ?? "";
   return <li className="ui-saved-item">
     <div className="flex items-start gap-2">
       <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 py-2">
         <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-primary" checked={completed} disabled={busy} onChange={(event) => fetcher.submit({ intent: "toggle-todo", todoId: todo.id, completed: String(event.target.checked) }, { method: "post", flushSync: true })} />
         <span className={`min-w-0 text-sm break-words ${completed ? "text-muted-foreground line-through" : "text-foreground"}`}>{todo.title}</span>
       </label>
+      <TodoPerson members={owners} ownerId={ownerId} title={todo.title} disabled={busy}
+        onChange={(ownerId) => fetcher.submit({ intent: "tag-todo", todoId: todo.id, ownerId }, { method: "post", flushSync: true })} />
       <fetcher.Form method="post">
         <input type="hidden" name="intent" value="delete-todo" />
         <input type="hidden" name="todoId" value={todo.id} />
@@ -88,7 +110,18 @@ function NotesEditor({ notes }: { notes: string }) {
     <fetcher.Form method="post" className="mt-5 grid gap-3">
       <input type="hidden" name="intent" value="save-notes" />
       <label htmlFor="trip-notes" className="ui-label">Notes</label>
-      <textarea id="trip-notes" name="notes" className={`${input} min-h-80 resize-y leading-relaxed`} value={draft} onChange={(event) => setDraft(event.target.value)} disabled={busy} maxLength={50000} placeholder="Packing ideas, places to explore, things to remember…" />
+      <MarkdownEditor
+        id="trip-notes"
+        name="notes"
+        label="Notes"
+        value={draft}
+        onChange={setDraft}
+        disabled={busy}
+        maxLength={50000}
+        placeholder="Packing ideas, places to explore, things to remember…"
+        emptyMessage="No notes yet. Add ideas, reminders, and useful details for your trip."
+        saveHint="Save notes to keep your changes."
+      />
       {fetcher.data?.error && <p role="alert" className="text-sm text-destructive">{fetcher.data.error}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-sm text-muted-foreground">{busy ? "Saving…" : draft !== notes ? "Unsaved changes" : fetcher.data?.ok ? "Notes saved." : ""}</p>
@@ -98,7 +131,7 @@ function NotesEditor({ notes }: { notes: string }) {
   </section>;
 }
 
-export default function Notes({ loaderData: { tripId, notes, todos } }: Route.ComponentProps) {
+export default function Notes({ loaderData: { tripId, notes, todos, owners } }: Route.ComponentProps) {
   const fetcher = useFetcher<typeof action>();
   const form = useRef<HTMLFormElement>(null);
   const submitted = useRef(false);
@@ -114,11 +147,11 @@ export default function Notes({ loaderData: { tripId, notes, todos } }: Route.Co
       <p className="section-description">{todos.length ? `${todos.filter((todo) => todo.completed).length} of ${todos.length} completed` : "A few small steps toward your next trip."}</p>
       <fetcher.Form ref={form} method="post" className="mt-5 flex flex-wrap items-end gap-2" onSubmit={() => { submitted.current = true; }}>
         <input type="hidden" name="intent" value="add-todo" />
-        <label className="ui-field flex-1 basis-48">New to-do<input className={input} name="title" required maxLength={500} disabled={fetcher.state !== "idle"} placeholder="e.g. Check passport expiry" /></label>
+        <TodoMentionInput members={owners} disabled={fetcher.state !== "idle"} />
         <button type="submit" className={primary} disabled={fetcher.state !== "idle"}>{fetcher.state === "idle" ? "Add to-do" : "Adding…"}</button>
       </fetcher.Form>
       {fetcher.data?.error && <p role="alert" className="mt-3 text-sm text-destructive">{fetcher.data.error}</p>}
-      {todos.length ? <ul className="mt-5 grid">{todos.map((todo) => <TodoItem key={todo.id} todo={todo} />)}</ul> : <p className="empty-state mt-5">No to-dos yet. Add your first task above.</p>}
+      {todos.length ? <ul className="mt-5 grid">{todos.map((todo) => <TodoItem key={todo.id} todo={todo} owners={owners} />)}</ul> : <p className="empty-state mt-5">No to-dos yet. Add your first task above.</p>}
     </section>
     <NotesEditor key={tripId} notes={notes} />
   </div>;

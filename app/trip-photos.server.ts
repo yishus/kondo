@@ -1,4 +1,5 @@
 import type { TripColumn } from "./card-order";
+import { isImageAttachment } from "./attachments";
 import { getPlacePhoto, type PlacePhotoResponse } from "./place-photo.server";
 
 // Stream photos from already-authorized cards: no per-card D1 reads. Duplicate
@@ -12,7 +13,7 @@ export function streamTripPhotos(columns: TripColumn[], apiKey: string | undefin
     ...column,
     cards: column.cards.map((card) => {
       const uploadedCover = card.attachments.some((attachment) =>
-        attachment.id === card.coverAttachmentId && attachment.contentType === "image/jpeg");
+        attachment.id === card.coverAttachmentId && isImageAttachment(attachment.contentType));
       if (card.type !== "location" || !card.googlePlaceId || uploadedCover) return card;
       const placeId = card.googlePlaceId;
       let googlePhoto = photos.get(placeId);

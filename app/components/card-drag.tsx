@@ -10,6 +10,10 @@ import type { CardDestination, CardMove, TripCard } from "../card-order";
 import { cardTypes, locationCategories, transportModes } from "../card-types";
 import { CardCover } from "./card-cover";
 import { Icon } from "./icon";
+import { TransportEstimateSummary } from "./transport-estimate-summary";
+import { HikeMap } from "./hike-map";
+import { GPX_CONTENT_TYPE, hikeSummary } from "../hike-gpx";
+import { attachmentUrl } from "../attachments";
 
 // Pointer drops must actually be inside a target. Keyboard movement snaps to
 // measured targets, including empty days.
@@ -127,6 +131,8 @@ export function DraggableCard({ card, disabled, onOpen }: {
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, isDragging } = useDraggable({
     id: card.id, data: { card }, disabled,
   });
+  const gpx = card.attachments.find((item) => item.contentType === GPX_CONTENT_TYPE);
+  const attachmentCount = card.attachments.filter((item) => item.contentType !== GPX_CONTENT_TYPE).length;
   return (
     <div ref={setNodeRef} className="trip-card flex min-w-0 items-stretch rounded-[9px] border border-border bg-surface text-[0.9rem] leading-[1.45] text-foreground transition-colors hover:border-input data-[dragging]:opacity-30" data-card-type={card.type} data-dragging={isDragging || undefined}>
       <button
@@ -146,8 +152,8 @@ export function DraggableCard({ card, disabled, onOpen }: {
       </button>
       <div className="flex min-w-0 flex-1 flex-col">
         <CardCover card={card} />
-        <span className="card-type-label">
-          <Icon name={card.type === "transport" ? "plane" : card.type === "city" ? "compass" : "pin"} width="11" height="11" />
+        <span className="card-type-label" data-card-label={card.type === "location" ? card.locationCategory ?? "location" : card.type}>
+          <Icon name={card.type === "transport" ? "route" : card.type === "city" ? "compass" : "pin"} width="11" height="11" />
           {card.type === "transport"
             ? transportModes[card.transportMode as keyof typeof transportModes] ?? "Transport"
             : card.type === "location" && card.locationCategory
@@ -163,9 +169,18 @@ export function DraggableCard({ card, disabled, onOpen }: {
           </span>
         )}
         {card.type === "transport" && (card.departureTime || card.arrivalTime || card.serviceNumber) && (
-          <span className="mb-2 text-xs text-muted-foreground">{[card.departureTime && `Dep. ${card.departureTime}`, card.arrivalTime && `Arr. ${card.arrivalTime}`, card.serviceNumber].filter(Boolean).join(" · ")}</span>
+          <span className="mb-2 text-xs text-muted-foreground">{[card.departureTime && `Dep. ${card.departureTime}${card.departureTimezone ? ` (${card.departureTimezone})` : ""}`, card.arrivalTime && `Arr. ${card.arrivalTime}${card.arrivalTimezone ? ` (${card.arrivalTimezone})` : ""}`, card.serviceNumber].filter(Boolean).join(" · ")}</span>
         )}
-        {card.attachments.length > 0 && <span className="mb-2 text-xs text-muted-foreground">📎 {card.attachments.length} {card.attachments.length === 1 ? "attachment" : "attachments"}</span>}
+        {card.type === "transport" && card.transportEstimate && (
+          <div className="mb-2 pr-3"><TransportEstimateSummary estimate={card.transportEstimate} /></div>
+        )}
+        {card.type === "hike" && <>
+          {gpx && <div className="mb-2 mr-3"><HikeMap compact url={attachmentUrl(card.tripId, card.id, gpx.id)} /></div>}
+          {(card.hikeDistanceKm !== null || card.hikeElevationGainM !== null) && (
+            <span className="mb-2 text-xs text-muted-foreground">{hikeSummary(card.hikeDistanceKm, card.hikeElevationGainM)}</span>
+          )}
+        </>}
+        {attachmentCount > 0 && <span className="mb-2 text-xs text-muted-foreground">📎 {attachmentCount} {attachmentCount === 1 ? "attachment" : "attachments"}</span>}
         {card.googlePlaceId && (
           <a href={googleMapsUrl(card.googlePlaceId, card.googleMapsQuery ?? card.title)} target="_blank" rel="noopener noreferrer"
             className="mb-3 mr-3 w-fit rounded text-xs font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"

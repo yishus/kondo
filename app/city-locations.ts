@@ -22,6 +22,7 @@ export function cityLocationTypeColor(type: string) {
 export type CityLocationDraft = {
   googlePlaceId: string;
   googleMapsQuery: string;
+  googlePlaceName?: string | null;
   locationType: string;
 };
 
@@ -56,6 +57,10 @@ export function readCityLocations(
     const candidate = item as Record<string, unknown>;
     const googlePlaceId = typeof candidate.googlePlaceId === "string" ? candidate.googlePlaceId.trim() : "";
     const googleMapsQuery = typeof candidate.googleMapsQuery === "string" ? candidate.googleMapsQuery.trim() : "";
+    const googlePlaceName = candidate.googlePlaceName == null ? null : typeof candidate.googlePlaceName === "string" ? candidate.googlePlaceName.trim() || null : false;
+    if (googlePlaceName === false || (googlePlaceName?.length ?? 0) > 300) {
+      return { ok: false, error: "Choose an area location with a name under 300 characters." };
+    }
     const locationType = typeof candidate.locationType === "string" ? candidate.locationType.trim() : "";
     if (!/^[A-Za-z0-9_-]{1,512}$/.test(googlePlaceId) || !googleMapsQuery || googleMapsQuery.length > 200) {
       return { ok: false, error: "Choose each area location from the Google Maps search results." };
@@ -67,7 +72,7 @@ export function readCityLocations(
       return { ok: false, error: "The same Google location cannot be added twice to one area." };
     }
     placeIds.add(googlePlaceId);
-    locations.push({ googlePlaceId, googleMapsQuery, locationType });
+    locations.push({ googlePlaceId, googleMapsQuery, googlePlaceName, locationType });
   }
   return { ok: true, locations };
 }

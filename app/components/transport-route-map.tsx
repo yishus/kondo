@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { loadGoogleMaps } from "../google-maps";
-import { buildTransitRoutePlan, googleTransitDirectionsUrl } from "../transport-route";
+import { buildTransportRoutePlan, buildTransportRouteRequest, googleTransportDirectionsUrl } from "../transport-route";
 
 type GoogleMap = {
   fitBounds(bounds: unknown, padding?: number): void;
@@ -88,7 +88,7 @@ function RouteCanvas({
   apiKey: string;
   destination: string;
   origin: string;
-  plan: Extract<ReturnType<typeof buildTransitRoutePlan>, { ok: true }>;
+  plan: Extract<ReturnType<typeof buildTransportRoutePlan>, { ok: true }>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "no-route" | "error">("loading");
@@ -125,22 +125,14 @@ function RouteCanvas({
           streetViewControl: false,
           zoom: 2,
         });
-        const request: Record<string, unknown> = {
-          origin,
-          destination,
-          travelMode: "TRANSIT",
-          transitPreference: { allowedTransitModes: [plan.preferredMode] },
-          fields: ["path", "legs", "viewport", "localizedValues"],
-        };
-        request[plan.timeField] = plan.requestTime;
+        const request = buildTransportRouteRequest(origin, destination, plan);
 
         let result = await Route.computeRoutes(request);
         if (!active) return;
 
-        // A train- or subway-only preference can be too restrictive for routes
-        // that need a short bus, tram, or walking connection. Retry as general
-        // public transit before treating an empty response as unavailable.
-        if (!result.routes?.length) {
+        // Retry transit without the mode preference when a connection needs
+        // another form of public transport.
+        if (!result.routes?.length && plan.travelMode === "TRANSIT") {
           const generalTransitRequest = { ...request };
           delete generalTransitRequest.transitPreference;
           result = await Route.computeRoutes(generalTransitRequest);
@@ -166,7 +158,7 @@ function RouteCanvas({
         setSummary(summarizeRoute(route));
         setStatus("ready");
       } catch (error) {
-        console.error("Google transit route preview failed", error);
+        console.error("Google route preview failed", error);
         if (active) setStatus("error");
       }
     })();
@@ -181,7 +173,7 @@ function RouteCanvas({
   return (
     <div className="grid gap-3">
       <div className="relative min-h-72 overflow-hidden rounded-[12px] border border-border bg-muted">
-        <div ref={containerRef} className="absolute inset-0" aria-label={`Transit route map from ${origin} to ${destination}`} />
+        <div ref={containerRef} className="absolute inset-0" aria-label={`Route map from ${origin} to ${destination}`} />
         {status === "loading" && (
           <div className="absolute inset-0 grid place-items-center bg-background/90 text-sm font-semibold text-secondary-foreground" role="status">
             Calculating route…
@@ -195,9 +187,11 @@ function RouteCanvas({
         {status === "no-route" && (
           <div className="absolute inset-0 grid place-items-center bg-background/95 p-6 text-center" role="status">
             <div className="max-w-md">
-              <p className="text-sm font-semibold text-foreground">No public-transit route is available from the Google Routes API.</p>
+              <p className="text-sm font-semibold text-foreground">No {plan.travelMode === "TRANSIT" ? "public-transit" : plan.travelMode === "DRIVING" ? "driving" : "walking"} route is available.</p>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                Try more specific station names or another time. Transit coverage can also differ from the consumer Google Maps app, which you can open below.
+                {plan.travelMode === "TRANSIT"
+                  ? "Try more specific stop or station names, or another time."
+                  : "Try more specific start and end locations."} You can also open directions in Google Maps below.
               </p>
             </div>
           </div>
@@ -211,7 +205,7 @@ function RouteCanvas({
             {summary.fare && <span>{summary.fare}</span>}
           </div>
           {usedGeneralTransit && (
-            <p className="text-xs text-muted-foreground">No {plan.preferredMode === "TRAIN" ? "train-only" : "subway-only"} result was available, so this route may include other public transport.</p>
+            <p className="text-xs text-muted-foreground">No route matched the preferred transport type, so this route may include other public transport.</p>
           )}
           {summary.lines.length > 0 && <p>Lines: {summary.lines.join(" · ")}</p>}
           {summary.agencies.length > 0 && (
@@ -238,6 +232,7 @@ export function TransportRouteMap({
   destination,
   mode,
   origin,
+  timezone,
 }: {
   apiKey: string;
   arrivalTime: string;
@@ -246,18 +241,20 @@ export function TransportRouteMap({
   destination: string;
   mode: string;
   origin: string;
+  timezone?: string | null;
 }) {
   const [clientReady, setClientReady] = useState(false);
   const [attempt, setAttempt] = useState<{ id: number; signature: string } | null>(null);
-  const signature = JSON.stringify({ arrivalTime, date, departureTime, destination, mode, origin });
-  const plan = useMemo(() => clientReady ? buildTransitRoutePlan({
+  const signature = JSON.stringify({ arrivalTime, date, departureTime, destination, mode, origin, timezone });
+  const plan = useMemo(() => clientReady ? buildTransportRoutePlan({
       mode,
       date,
       departureTime,
       arrivalTime,
+      timezone,
     }) : { ok: false as const, error: "Preparing route preview…" },
-  [arrivalTime, clientReady, date, departureTime, mode]);
-  const directionsUrl = googleTransitDirectionsUrl(origin, destination);
+  [arrivalTime, clientReady, date, departureTime, mode, timezone]);
+  const directionsUrl = googleTransportDirectionsUrl(origin, destination, mode);
   const showMap = Boolean(attempt && attempt.signature === signature && plan.ok);
 
   useEffect(() => setClientReady(true), []);
@@ -268,7 +265,11 @@ export function TransportRouteMap({
         <div>
           <h3 className="ui-label" id="transport-route-heading">Google Maps route</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Uses the trip day and {departureTime ? "departure" : "arrival"} time in {plan.ok ? plan.timeZone : "your device’s time zone"}.
+            {mode === "walk"
+              ? "Walking route between the start and end locations."
+              : plan.ok && plan.travelMode === "DRIVING" && !plan.requestTime
+                ? "General driving estimate; traffic at the specified time is not included."
+                : `Uses the trip day and ${departureTime ? "departure" : "arrival"} time in ${plan.ok ? plan.timeZone : timezone || "your device’s time zone"}.`}
           </p>
         </div>
         <button
@@ -282,8 +283,8 @@ export function TransportRouteMap({
       </div>
       {!apiKey && <p className="text-sm font-medium text-destructive">Add GOOGLE_MAPS_BROWSER_API_KEY to .dev.vars to enable route previews.</p>}
       {apiKey && !plan.ok && <p className="text-sm text-muted-foreground">{plan.error}</p>}
-      {plan.ok && departureTime && arrivalTime && (
-        <p className="text-xs text-muted-foreground">Google accepts one schedule anchor, so this preview uses the departure time.</p>
+      {plan.ok && plan.usesDepartureTime && departureTime && arrivalTime && (
+        <p className="text-xs text-muted-foreground">This preview uses the departure time.</p>
       )}
       {showMap && plan.ok && (
         <RouteCanvas

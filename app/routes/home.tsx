@@ -10,6 +10,7 @@ import { tripDays, tripOwners, trips } from "../db/schema";
 import { formatTripDates, getTripPeriod, type TripPeriod } from "../trip-dates";
 import { AppShell } from "../components/app-shell";
 import { Icon } from "../components/icon";
+import { readTimezone } from "../timezones";
 
 function formString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -64,9 +65,11 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const id = uuidv7();
+  const timezone = readTimezone(formData.get("timezone"));
+  if (!timezone.ok) return data(timezone, { status: 400 });
   const db = getDb(env.DB);
   await db.batch([
-    db.insert(trips).values({ id, title }),
+    db.insert(trips).values({ id, title, timezone: timezone.timezone }),
     db.insert(tripOwners).values({ tripId: id, userId: currentUser.id }),
   ]);
 
@@ -75,7 +78,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 export function meta() {
   return [
-    { title: "Trips" },
+    { title: "Trips | kondo" },
     {
       name: "description",
       content: "Create a trip and organize each day on a simple planning board.",

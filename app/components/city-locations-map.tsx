@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { Map as LeafletMap } from "leaflet";
 
 import { cityLocationTypeColor } from "../city-locations";
 import type { CityCardLocation } from "../db/schema";
 import { loadGoogleMaps } from "../google-maps";
 
-type MapInstance = {
-  fitBounds(bounds: unknown, padding?: number): void;
-  setCenter(position: unknown): void;
-  setZoom(zoom: number): void;
+type Place = {
+  displayName?: string;
+  location?: { lat(): number; lng(): number };
+  fetchFields(options: { fields: string[] }): Promise<void>;
 };
-
-type MarkerInstance = { map: MapInstance | null };
 
 export function CityLocationsMap({ apiKey, locations }: {
   apiKey: string;
@@ -42,65 +41,61 @@ export function CityLocationsMap({ apiKey, locations }: {
   useEffect(() => {
     if (!visible || !apiKey || !mapRef.current || locations.length === 0) return;
     let cancelled = false;
-    let markers: MarkerInstance[] = [];
+    let map: LeafletMap | undefined;
+    let resize: ResizeObserver | undefined;
     setStatus("loading");
 
     void (async () => {
       try {
-        const maps = await loadGoogleMaps(apiKey);
-        const [mapsLibrary, markerLibrary, placesLibrary] = await Promise.all([
-          maps.importLibrary("maps"),
-          maps.importLibrary("marker"),
-          maps.importLibrary("places"),
+        const [L, placesLibrary] = await Promise.all([
+          import("leaflet"),
+          loadGoogleMaps(apiKey).then((maps) => maps.importLibrary("places")),
         ]);
         if (cancelled || !mapRef.current) return;
 
-        const Map = mapsLibrary.Map as new (element: HTMLElement, options: Record<string, unknown>) => MapInstance;
-        const LatLngBounds = mapsLibrary.LatLngBounds as new () => { extend(position: unknown): void; isEmpty(): boolean };
-        const AdvancedMarkerElement = markerLibrary.AdvancedMarkerElement as new (options: Record<string, unknown>) => MarkerInstance;
-        const PinElement = markerLibrary.PinElement as new (options: Record<string, unknown>) => HTMLElement & { element?: HTMLElement };
-        const Place = placesLibrary.Place as new (options: { id: string }) => { location?: unknown; fetchFields(options: { fields: string[] }): Promise<void> };
-        const map = new Map(mapRef.current, {
-          center: { lat: 0, lng: 0 },
-          zoom: 2,
-          mapId: "DEMO_MAP_ID",
-          clickableIcons: false,
-          fullscreenControl: false,
-          mapTypeControl: false,
-          streetViewControl: false,
-        });
-        const bounds = new LatLngBounds();
+        const Place = placesLibrary.Place as new (options: { id: string }) => Place;
         const settled = await Promise.allSettled(locations.map(async (location) => {
           const place = new Place({ id: location.googlePlaceId });
-          await place.fetchFields({ fields: ["location"] });
+          await place.fetchFields({ fields: ["location", "displayName"] });
           if (!place.location || cancelled) return null;
-          const color = cityLocationTypeColor(location.locationType);
-          const pin = new PinElement({
-            background: color,
-            borderColor: color,
-            glyphColor: "#ffffff",
-            glyphText: location.locationType.trim().slice(0, 1).toLocaleUpperCase(),
-            scale: 0.9,
-          });
-          bounds.extend(place.location);
-          const marker = new AdvancedMarkerElement({
-            map,
-            position: place.location,
-            title: `${location.googleMapsQuery} · ${location.locationType}`,
-            content: pin.element ?? pin,
-          });
-          return { marker, position: place.location };
+          return {
+            location,
+            name: place.displayName || location.googleMapsQuery,
+            position: L.latLng(place.location.lat(), place.location.lng()),
+          };
         }));
-        if (cancelled) return;
+        if (cancelled || !mapRef.current) return;
         const resolved = settled.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
-        markers = resolved.map(({ marker }) => marker);
-        if (markers.length === 0 || bounds.isEmpty()) throw new Error("No place coordinates were available.");
-        map.fitBounds(bounds, 44);
-        if (resolved.length === 1) {
-          map.setCenter(resolved[0].position);
-          map.setZoom(14);
+        if (resolved.length === 0) throw new Error("No place coordinates were available.");
+
+        map = L.map(mapRef.current, { scrollWheelZoom: false });
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(map);
+        for (const { location, name, position } of resolved) {
+          const pin = document.createElement("div");
+          pin.className = "flex size-7 items-center justify-center rounded-full border-2 border-white text-xs font-bold text-white shadow-md";
+          pin.style.backgroundColor = cityLocationTypeColor(location.locationType);
+          pin.textContent = location.locationType.trim().slice(0, 1).toLocaleUpperCase();
+          const popup = document.createElement("span");
+          popup.textContent = name;
+          L.marker(position, {
+            title: name,
+            alt: name,
+            icon: L.divIcon({
+              className: "city-location-pin",
+              html: pin,
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+              popupAnchor: [0, -14],
+            }),
+          }).bindPopup(popup, { maxWidth: 220 }).addTo(map);
         }
-        if (!cancelled) setStatus("ready");
+        map.fitBounds(L.latLngBounds(resolved.map(({ position }) => position)), { padding: [32, 32], maxZoom: 14 });
+        resize = new ResizeObserver(() => map?.invalidateSize());
+        resize.observe(mapRef.current);
+        setStatus("ready");
       } catch {
         if (!cancelled) setStatus("error");
       }
@@ -108,16 +103,17 @@ export function CityLocationsMap({ apiKey, locations }: {
 
     return () => {
       cancelled = true;
-      markers.forEach((marker) => { marker.map = null; });
+      resize?.disconnect();
+      map?.remove();
     };
   }, [apiKey, locations, visible]);
 
   return (
     <section ref={rootRef} className="overflow-hidden rounded-[10px] border border-border bg-surface/70" aria-label={`Map of ${locations.length} area ${locations.length === 1 ? "location" : "locations"}`}>
-      <div className="relative h-44 w-full overflow-hidden bg-muted">
+      <div className="relative isolate h-44 w-full overflow-hidden bg-muted">
         <div ref={mapRef} className="h-full w-full" />
         {(!apiKey || status !== "ready") && (
-          <div className="absolute inset-0 grid place-items-center px-5 text-center text-xs font-semibold text-muted-foreground">
+          <div role="status" className="absolute inset-0 z-[1000] grid place-items-center bg-muted px-5 text-center text-xs font-semibold text-muted-foreground">
             {!apiKey ? "Add a Google Maps browser API key to show this map." : status === "error" ? "The location map could not be loaded." : "Loading location map…"}
           </div>
         )}

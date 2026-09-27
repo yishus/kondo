@@ -1,7 +1,7 @@
 import { Suspense, useState } from "react";
 import { Await } from "react-router";
 
-import { attachmentUrl } from "../attachments";
+import { attachmentUrl, isImageAttachment } from "../attachments";
 import type { TripCard } from "../card-order";
 import type { PlacePhotoResponse } from "../place-photo.server";
 
@@ -29,7 +29,7 @@ function GooglePlaceCover({ card, photo }: { card: TripCard; photo: PlacePhotoRe
 export function CardCover({ card }: { card: TripCard }) {
   if (card.type !== "location") return null;
   const uploadedCover = card.attachments.find((attachment) =>
-    attachment.id === card.coverAttachmentId && attachment.contentType === "image/jpeg",
+    attachment.id === card.coverAttachmentId && isImageAttachment(attachment.contentType),
   );
   if (uploadedCover) {
     const url = attachmentUrl(card.tripId, card.id, uploadedCover.id);

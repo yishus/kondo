@@ -1,0 +1,1 @@
+ALTER TABLE trip_todos ADD COLUMN owner_id TEXT REFERENCES user(id) ON DELETE SET NULL;

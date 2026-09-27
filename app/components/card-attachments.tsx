@@ -1,6 +1,24 @@
-import { useRef, useState } from "react";
-import { attachmentFileError, attachmentUrl, formatFileSize, MAX_ATTACHMENTS } from "../attachments";
+import { useEffect, useRef, useState } from "react";
+import { attachmentFileError, attachmentUrl, formatFileSize, isImageAttachment, MAX_ATTACHMENTS } from "../attachments";
 import type { CardAttachment } from "../db/schema";
+
+function ImagePreview({ url, filename }: { url: string; filename: string }) {
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block w-full overflow-hidden rounded-md bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" aria-label={`Open image ${filename}`}>
+      <img src={url} alt={filename} className="max-h-64 w-full object-contain" loading="lazy" />
+    </a>
+  );
+}
+
+function UploadImagePreview({ file }: { file: File }) {
+  const [preview, setPreview] = useState<{ file: File; url: string } | null>(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setPreview({ file, url });
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  return preview?.file === file ? <ImagePreview url={preview.url} filename={file.name} /> : null;
+}
 
 export function CardAttachments({ tripId, attachments, coverAttachmentId, allowCover, disabled }: {
   tripId: string;
@@ -12,7 +30,7 @@ export function CardAttachments({ tripId, attachments, coverAttachmentId, allowC
   const [removed, setRemoved] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [coverChoice, setCoverChoice] = useState(
-    attachments.some((attachment) => attachment.id === coverAttachmentId && attachment.contentType === "image/jpeg")
+    attachments.some((attachment) => attachment.id === coverAttachmentId && isImageAttachment(attachment.contentType))
       ? `existing:${coverAttachmentId}`
       : "",
   );
@@ -38,12 +56,13 @@ export function CardAttachments({ tripId, attachments, coverAttachmentId, allowC
             return (
               <li key={attachment.id} className="ui-saved-item flex flex-wrap items-center gap-2">
                 {removing && <input type="hidden" name="removeAttachmentId" value={attachment.id} />}
+                {!removing && isImageAttachment(attachment.contentType) && <ImagePreview url={url} filename={attachment.filename} />}
                 <div className="min-w-0 flex-1">
                   <a href={url} target="_blank" rel="noopener noreferrer" className={`block break-words text-[13px] font-medium text-primary hover:underline ${removing ? "line-through opacity-50" : ""}`}>{attachment.filename}</a>
-                  <p className="mt-1 text-xs text-muted-foreground">{removing ? "Will be removed when you save" : `${attachment.contentType === "application/pdf" ? "PDF" : "JPG"} · ${formatFileSize(attachment.size)}`}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{removing ? "Will be removed when you save" : `${attachment.contentType === "application/pdf" ? "PDF" : attachment.contentType === "image/png" ? "PNG" : "JPG"} · ${formatFileSize(attachment.size)}`}</p>
                   {!removing && <a href={`${url}?download=1`} className="mt-1 inline-block text-xs text-secondary-foreground hover:underline" aria-label={`Download ${attachment.filename}`}>Download</a>}
                 </div>
-                {allowCover && attachment.contentType === "image/jpeg" && !removing && (
+                {allowCover && isImageAttachment(attachment.contentType) && !removing && (
                   <label className="ui-check shrink-0">
                     <input
                       type="radio"
@@ -68,21 +87,22 @@ export function CardAttachments({ tripId, attachments, coverAttachmentId, allowC
       )}
       <label className="ui-field">
         Add files
-        <input className="ui-input" ref={inputRef} name="attachments" type="file" multiple accept=".jpg,.jpeg,.pdf,image/jpeg,application/pdf" aria-describedby="attachment-help" aria-invalid={Boolean(error)} onChange={(event) => {
+        <input className="ui-input" ref={inputRef} name="attachments" type="file" multiple accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" aria-describedby="attachment-help" aria-invalid={Boolean(error)} onChange={(event) => {
           const next = Array.from(event.target.files ?? []);
           setFiles(next);
           if (coverChoice.startsWith("upload:")) setCoverChoice("");
           validate(next, removed);
         }} />
       </label>
-      <p id="attachment-help" className="text-xs text-muted-foreground">JPG or PDF · Up to 5 files per card · 10 MB per file. Files are uploaded when you save.</p>
+      <p id="attachment-help" className="text-xs text-muted-foreground">JPG, PNG or PDF · Up to 5 files per card · 10 MB per file. Files are uploaded when you save.</p>
       {files.length > 0 && (
         <div className="ui-saved-item">
           <ul aria-label="Files to upload" className="grid gap-2 text-sm">
             {files.map((file, index) => (
-              <li key={index} className="flex items-center justify-between gap-3 break-words">
-                <span>{file.name} <span className="text-xs text-muted-foreground">({formatFileSize(file.size)})</span></span>
-                {allowCover && /\.jpe?g$/i.test(file.name) && (
+              <li key={index} className="flex flex-wrap items-center justify-between gap-3 break-words">
+                {/\.(jpe?g|png)$/i.test(file.name) && !attachmentFileError(file) && <UploadImagePreview file={file} />}
+                <span className="min-w-0 flex-1">{file.name} <span className="text-xs text-muted-foreground">({formatFileSize(file.size)})</span></span>
+                {allowCover && /\.(jpe?g|png)$/i.test(file.name) && (
                   <label className="ui-check shrink-0">
                     <input
                       type="radio"

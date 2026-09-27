@@ -3,6 +3,8 @@ import { and, asc, eq, exists, isNotNull } from "drizzle-orm";
 import type { Database } from "./db.server";
 import { tripOwners } from "./db/schema";
 import { googleMapsUrl } from "./card-location";
+import { estimateForDate } from "./transport-estimate";
+import { effectiveTimezone, transportTimezone } from "./timezones";
 import { UNSCHEDULED_COLUMN_ID, type TripCard, type TripColumn } from "./card-order";
 
 export async function loadTripBoard(db: Database, tripId: string, userId: string) {
@@ -16,7 +18,7 @@ export async function loadTripBoard(db: Database, tripId: string, userId: string
         columns: {},
         with: { user: { columns: { id: true, name: true, email: true } } },
       },
-      days: { columns: { id: true, tripDate: true }, orderBy: (day) => asc(day.tripDate) },
+      days: { columns: { id: true, tripDate: true, timezone: true, timeEstimate: true }, orderBy: (day) => asc(day.tripDate) },
       cards: {
         columns: { cityGroupId: false },
         orderBy: (card) => [asc(card.position), asc(card.id)],
@@ -41,14 +43,17 @@ export async function loadTripBoard(db: Database, tripId: string, userId: string
   const { owners, days, cards, places, ...trip } = row;
   const cardsByDay = new Map<string, TripCard[]>();
   for (const card of cards) {
+    const day = days.find((day) => day.id === card.tripDayId);
     const columnId = card.tripDayId ?? UNSCHEDULED_COLUMN_ID;
     const column = cardsByDay.get(columnId) ?? [];
-    column.push({ ...card, tripDayId: columnId });
+    column.push({ ...card, tripDayId: columnId,
+      transportEstimate: estimateForDate(card.transportEstimate, day?.tripDate ?? null, transportTimezone(card, effectiveTimezone(trip.timezone, day?.timezone ?? null))),
+    });
     cardsByDay.set(columnId, column);
   }
   const tripColumns: TripColumn[] = [
-    { id: UNSCHEDULED_COLUMN_ID, date: null, cards: cardsByDay.get(UNSCHEDULED_COLUMN_ID) ?? [] },
-    ...days.map((day) => ({ id: day.id, date: day.tripDate, cards: cardsByDay.get(day.id) ?? [] })),
+    { id: UNSCHEDULED_COLUMN_ID, date: null, timezone: null, effectiveTimezone: trip.timezone, cards: cardsByDay.get(UNSCHEDULED_COLUMN_ID) ?? [] },
+    ...days.map((day) => ({ id: day.id, date: day.tripDate, timezone: day.timezone, effectiveTimezone: effectiveTimezone(trip.timezone, day.timezone), timeEstimate: day.timeEstimate, cards: cardsByDay.get(day.id) ?? [] })),
   ];
   const confirmedStays = places.flatMap((place) => place.accommodations.flatMap((stay) => {
     const dates = stay.dateOptions.find((option) => option.id === stay.confirmedOptionId);

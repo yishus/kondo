@@ -129,7 +129,7 @@ export function getNotesPage(context: Readonly<RouterContextProvider>, request: 
 
 export function isTripBoardRequest(request: Request, tripId: string) {
   const pathname = new URL(request.url).pathname.replace(/\.data$/, "").replace(/\/$/, "");
-  return pathname === `/trips/${encodeURIComponent(tripId)}`;
+  return pathname === `/trips/${encodeURIComponent(tripId)}` || pathname === `/trips/${encodeURIComponent(tripId)}/map`;
 }
 
 export function isAccommodationsRequest(request: Request, tripId: string) {

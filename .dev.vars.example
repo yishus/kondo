@@ -7,6 +7,18 @@ GOOGLE_MAPS_API_KEY=""
 # A Maps Demo Key is suitable for local development; do not use it in production.
 GOOGLE_MAPS_BROWSER_API_KEY=""
 
+# Optional: enables Thunderforest Outdoors in the hike map layer picker.
+# Sent to the browser for direct tile requests. Get a key from thunderforest.com.
+THUNDERFOREST_API_KEY=""
+
+# Optional: Jev classifies location activities when Refresh times is pressed.
+# Server-side only. Get a key from https://console.typesafe.ai.
+TYPESAFE_API_KEY=""
+
+# Optional: enables GPT-6 Sol chat with web search in saved card modals.
+# Server-side only. Requires an OpenAI API project with access to gpt-6-sol.
+OPENAI_API_KEY=""
+
 # Generate with: openssl rand -base64 32
 BETTER_AUTH_SECRET=""
 # Optional in local development. Set this to the public application origin in production.

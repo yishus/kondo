@@ -16,14 +16,29 @@ import { readCityLocations } from "../city-locations";
 import { CityLocationsEditor } from "../components/city-locations-editor";
 import { CityLocationsMap } from "../components/city-locations-map";
 import { CardLocationPicker } from "../components/card-location";
+import { CardSearch } from "../components/card-search";
+import { CardChat } from "../components/card-chat";
+import { TransportLocationPicker } from "../components/transport-location-picker";
 import { TransportRouteMap } from "../components/transport-route-map";
+import { isMappableTransportMode } from "../transport-route";
+import { TimezoneField } from "../components/timezone-field";
+import { DayOptions } from "../components/day-options";
+import { effectiveTimezone, readTimezone, transportTimezone } from "../timezones";
+import { TransportEstimateSummary } from "../components/transport-estimate-summary";
+import { fetchTransportEstimate } from "../transport-estimate.server";
 import { saveCardWithAttachments } from "../attachments.server";
+import { HikeGpxEditor } from "../components/hike-gpx-editor";
+import { GPX_CONTENT_TYPE } from "../hike-gpx";
 import { CardAttachments } from "../components/card-attachments";
 import { moveCard } from "../card-move.server";
 import { deleteCard } from "../card-delete.server";
 import { previewCardMove, UNSCHEDULED_COLUMN_ID, type CardMove, type TripCard, type TripColumn } from "../card-order";
 import { CardDragBoard, CardDropSlot, DraggableCard } from "../components/card-drag";
 import { Icon } from "../components/icon";
+import { TripMap } from "../components/trip-map";
+import { MarkdownEditor } from "../components/markdown-editor";
+import { dayEstimateSlots, type DayEstimate } from "../day-estimate";
+import { refreshDayEstimate } from "../day-estimate.server";
 
 type ActiveCard =
   | { mode: "create"; tripDayId: string }
@@ -85,7 +100,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = formString(formData, "intent");
   const tripRows = await db
-    .select({ id: trips.id })
+    .select({ id: trips.id, timezone: trips.timezone })
     .from(trips)
     .where(eq(trips.id, params.tripId))
     .limit(1);
@@ -96,6 +111,17 @@ export async function action({ params, request }: Route.ActionArgs) {
       { ok: false as const, error: "That trip no longer exists." },
       { status: 404 },
     );
+  }
+
+  if (intent === "refresh-day-estimate") {
+    try {
+      const result = await refreshDayEstimate(db, trip.id, formString(formData, "dayId"), trip.timezone, formData.get("deviceTimezone"), {
+        apiKey: (env as typeof env & { TYPESAFE_API_KEY?: string }).TYPESAFE_API_KEY,
+      });
+      return data({ ok: result.ok, error: result.error }, { status: result.status });
+    } catch {
+      return data({ ok: false as const, error: "Could not refresh times. Your previous estimates are still saved. Please try again." }, { status: 500 });
+    }
   }
 
   if (intent === "delete-card") {
@@ -120,6 +146,8 @@ export async function action({ params, request }: Route.ActionArgs) {
 
   if (intent === "add-day") {
     const date = formString(formData, "date");
+    const timezone = readTimezone(formData.get("timezone"));
+    if (!timezone.ok) return data(timezone, { status: 400 });
 
     if (!isValidDate(date)) {
       return data(
@@ -133,6 +161,7 @@ export async function action({ params, request }: Route.ActionArgs) {
         id: uuidv7(),
         tripId: trip.id,
         tripDate: date,
+        timezone: timezone.timezone,
       });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
@@ -145,6 +174,16 @@ export async function action({ params, request }: Route.ActionArgs) {
       throw error;
     }
 
+    return { ok: true as const, error: null };
+  }
+
+  if (intent === "update-day-timezone") {
+    const timezone = readTimezone(formData.get("timezone"));
+    if (!timezone.ok) return data(timezone, { status: 400 });
+    const updated = await db.update(tripDays).set({ timezone: timezone.timezone })
+      .where(and(eq(tripDays.id, formString(formData, "dayId")), eq(tripDays.tripId, trip.id)))
+      .returning({ id: tripDays.id });
+    if (!updated.length) return data({ ok: false as const, error: "That trip day no longer exists." }, { status: 404 });
     return { ok: true as const, error: null };
   }
 
@@ -198,9 +237,11 @@ export async function action({ params, request }: Route.ActionArgs) {
       );
     }
 
+    let tripDate: string | null = null;
+    let timezone = trip.timezone;
     if (tripDayId !== null) {
       const dayRows = await db
-        .select({ id: tripDays.id })
+        .select({ id: tripDays.id, tripDate: tripDays.tripDate, timezone: tripDays.timezone })
         .from(tripDays)
         .where(and(eq(tripDays.id, tripDayId), eq(tripDays.tripId, trip.id)))
         .limit(1);
@@ -211,14 +252,20 @@ export async function action({ params, request }: Route.ActionArgs) {
           { status: 404 },
         );
       }
+      tripDate = dayRows[0].tripDate;
+      timezone = effectiveTimezone(trip.timezone, dayRows[0].timezone);
     }
     const details = readCardDetails(formData);
     if (!details.ok) return data({ ok: false as const, error: details.error }, { status: 400 });
-    const location = readCardLocation(details.details.type === "location" ? formData : new FormData());
+    const location = readCardLocation((details.details.type === "location" || details.details.type === "hike") ? formData : new FormData());
     if (!location.ok) return data({ ok: false as const, error: location.error }, { status: 400 });
     const areaLocations = readCityLocations(formData, details.details.type);
     if (!areaLocations.ok) return data({ ok: false as const, error: areaLocations.error }, { status: 400 });
 
+    const transportEstimate = await fetchTransportEstimate({
+      card: details.details, date: tripDate, timezone,
+      utcOffsetMinutes: formString(formData, "transportUtcOffset"), apiKey: env.GOOGLE_MAPS_API_KEY,
+    });
     const cardId = uuidv7();
     return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, (coverAttachmentId) => [
       db.insert(cards).values({
@@ -227,6 +274,7 @@ export async function action({ params, request }: Route.ActionArgs) {
         tripId: trip.id,
         tripDayId,
         ...details.details,
+        transportEstimate,
         coverAttachmentId,
         position: sql<number>`(
           SELECT COALESCE(MAX(position) + 1, 0)
@@ -241,7 +289,7 @@ export async function action({ params, request }: Route.ActionArgs) {
         position,
       })),
     ],
-      { allowCover: details.details.type === "location" },
+      { allowCover: details.details.type === "location", allowGpx: details.details.type === "hike" },
     );
   }
 
@@ -262,7 +310,7 @@ export async function action({ params, request }: Route.ActionArgs) {
 
     const details = readCardDetails(formData, card);
     if (!details.ok) return data({ ok: false as const, error: details.error }, { status: 400 });
-    const location = readCardLocation(details.details.type === "location" ? formData : new FormData(), card);
+    const location = readCardLocation((details.details.type === "location" || details.details.type === "hike") ? formData : new FormData(), card);
     if (!location.ok) return data({ ok: false as const, error: location.error }, { status: 400 });
     const savedAreaLocations = card.type === "city"
       ? await db.select().from(cityCardLocations).where(eq(cityCardLocations.cardId, cardId)).orderBy(asc(cityCardLocations.position))
@@ -270,11 +318,21 @@ export async function action({ params, request }: Route.ActionArgs) {
     const areaLocations = readCityLocations(formData, details.details.type, savedAreaLocations);
     if (!areaLocations.ok) return data({ ok: false as const, error: areaLocations.error }, { status: 400 });
 
+    const [day] = card.tripDayId
+      ? await db.select({ tripDate: tripDays.tripDate, timezone: tripDays.timezone }).from(tripDays)
+        .where(and(eq(tripDays.id, card.tripDayId), eq(tripDays.tripId, trip.id))).limit(1)
+      : [];
+    const transportEstimate = await fetchTransportEstimate({
+      card: details.details, date: day?.tripDate ?? null, timezone: effectiveTimezone(trip.timezone, day?.timezone ?? null),
+      utcOffsetMinutes: formString(formData, "transportUtcOffset"), apiKey: env.GOOGLE_MAPS_API_KEY,
+    });
+
     return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, (coverAttachmentId) => [
       db.update(cards)
         .set({
           ...location.location,
           ...details.details,
+          transportEstimate,
           coverAttachmentId,
           updatedAt: sql`CURRENT_TIMESTAMP`,
         })
@@ -292,6 +350,7 @@ export async function action({ params, request }: Route.ActionArgs) {
     ], {
       allowCover: details.details.type === "location",
       currentCoverAttachmentId: card.coverAttachmentId,
+      allowGpx: card.type === "hike",
     });
   }
 
@@ -301,9 +360,9 @@ export async function action({ params, request }: Route.ActionArgs) {
   );
 }
 
-export function meta({}: Route.MetaArgs) {
+export function meta({ loaderData }: Route.MetaArgs) {
   return [
-    { title: "Trip Board" },
+    { title: loaderData ? `${loaderData.trip.title} | kondo` : "kondo" },
     {
       name: "description",
       content: "A simple board for planning your next trip.",
@@ -346,9 +405,24 @@ function UnscheduledColumn({ column, onAddCard, onOpenCard, moving }: {
   );
 }
 
+function EstimateLabel({ time, explanation }: { time: string; explanation: string }) {
+  return (
+    <div className="day-time-estimate" title={explanation}>
+      <span className="day-time-estimate-line" aria-hidden="true" />
+      <span aria-label={`Estimated time ${time}. ${explanation}`}>≈ {time}</span>
+      <span className="day-time-estimate-line" aria-hidden="true" />
+    </div>
+  );
+}
+
+function EstimateLabels({ labels }: { labels: DayEstimate["labels"] }) {
+  return labels.map((label) => <EstimateLabel key={label.afterCardId} time={label.time} explanation={label.explanation} />);
+}
+
 function DayColumn({
   column,
   tripId,
+  tripTimezone,
   confirmedStays,
   onAddCard,
   onOpenCard,
@@ -356,12 +430,19 @@ function DayColumn({
 }: {
   column: TripColumn & { date: string };
   tripId: string;
+  tripTimezone: string | null;
   confirmedStays: Route.ComponentProps["loaderData"]["confirmedStays"];
   onAddCard: (tripDayId: string) => void;
   onOpenCard: (card: TripCard) => void;
   moving: boolean;
 }) {
   const fetcher = useFetcher<typeof action>();
+  const estimateFetcher = useFetcher<typeof action>();
+  const cityCardIds = new Set(column.cards.filter((card) => card.type === "city").map((card) => card.id));
+  const visibleEstimate = column.timeEstimate ? { ...column.timeEstimate,
+    labels: column.timeEstimate.labels.filter((label) => !cityCardIds.has(label.afterCardId)),
+  } : null;
+  const estimateSlots = dayEstimateSlots(column.cards.map((card) => card.id), visibleEstimate);
   const pendingDate = fetcher.formData?.get("date");
   const displayedDate =
     typeof pendingDate === "string" ? pendingDate : column.date;
@@ -370,15 +451,21 @@ function DayColumn({
 
   function renderCards() {
     const destination = { tripDayId: column.id };
+    const firstActivityIndex = column.cards.findIndex((card) => card.type !== "city");
+    const startLabel = visibleEstimate && visibleEstimate.labels.length > 0
+      ? <EstimateLabel time={visibleEstimate.startLabel} explanation={`Estimated start of day · ${visibleEstimate.timezone}`} />
+      : null;
     return (
       <div className="grid">
-        {column.cards.map((card) => (
+        {column.cards.map((card, index) => (
           <CardDropSlot
             key={card.id}
             destination={{ ...destination, beforeCardId: card.id }}
             label={`Before ${card.title}, ${formatTripDate(column.date)}`}
             disabled={moving}
           >
+            {index === firstActivityIndex && startLabel}
+            <EstimateLabels labels={estimateSlots[index]} />
             <DraggableCard card={card} disabled={moving} onOpen={() => onOpenCard(card)} />
           </CardDropSlot>
         ))}
@@ -387,6 +474,8 @@ function DayColumn({
           label={`End of ${formatTripDate(column.date)}`}
           disabled={moving}
         >
+          {firstActivityIndex === -1 && startLabel}
+          <EstimateLabels labels={estimateSlots[column.cards.length]} />
           <button className="ui-button w-full justify-start text-left" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
             <span aria-hidden="true">＋</span> Add card
           </button>
@@ -426,6 +515,12 @@ function DayColumn({
             );
           }}
         />
+        <DayOptions dayId={column.id} dateLabel={formatTripDate(column.date)} timezone={column.timezone} tripTimezone={tripTimezone}
+          refreshing={estimateFetcher.state !== "idle"}
+          refreshDisabled={estimateFetcher.state !== "idle" || moving || (!column.cards.length && !column.timeEstimate?.labels.length)}
+          onRefresh={() => estimateFetcher.submit({ intent: "refresh-day-estimate", dayId: column.id,
+            deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }, { method: "post" })} />
         <span
           className="count-badge shrink-0 bg-surface"
           aria-label={`${column.cards.length} cards`}
@@ -434,12 +529,16 @@ function DayColumn({
         </span>
       </div>
 
+      <p className="mt-3 px-1 text-[11px] leading-relaxed text-muted-foreground">{column.effectiveTimezone ?? "Time zone not set"}{column.timezone ? " · Day override" : " · Trip default"}</p>
+
       {error && (
         <p className="mb-3 px-1 text-xs font-medium text-destructive" id={errorId}>
           {error}
         </p>
       )}
 
+      {estimateFetcher.state === "idle" && estimateFetcher.data?.error && <p role="alert" className="mb-2 text-xs text-destructive">{estimateFetcher.data.error}</p>}
+      <p role="status" className="sr-only">{estimateFetcher.state !== "idle" ? "Estimating times." : estimateFetcher.data?.ok ? "Estimated times refreshed." : ""}</p>
       {renderCards()}
     </section>
     {confirmedStays.filter((stay) => stay.checkIn <= displayedDate && displayedDate < stay.checkOut).map((stay) => (
@@ -456,7 +555,7 @@ function DayColumn({
   );
 }
 
-export default function Home({ loaderData }: Route.ComponentProps) {
+export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.ComponentProps, "loaderData"> & { view?: "itinerary" | "map" }) {
   const { trip, tripColumns, confirmedStays, googleMapsBrowserApiKey } = loaderData;
   const addDayFetcher = useFetcher<typeof action>();
   const cardFetcher = useFetcher<typeof action>();
@@ -492,7 +591,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [selectedDate, setSelectedDate] = useState("");
   const [addServerError, setAddServerError] = useState<string | null>(null);
   const [activeCard, setActiveCard] = useState<ActiveCard | null>(null);
-  const [cardDraft, setCardDraft] = useState({ type: "location" as CardType, title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", departureTime: "", arrivalTime: "", serviceNumber: "" });
+  const [cardPanel, setCardPanel] = useState<"details" | "chat">("details");
+  const [cardDraft, setCardDraft] = useState({ type: "location" as CardType, title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", startLocationName: "", endLocationName: "", departureTime: "", arrivalTime: "", departureTimezone: "", arrivalTimezone: "", serviceNumber: "" });
   const [cardLocation, setCardLocation] = useState<CardLocation>({ googlePlaceId: null, googleMapsQuery: null });
   const [cardErrorFor, setCardErrorFor] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -511,6 +611,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     : null;
   const activeCardDate = activeCard
     ? tripColumns.find((column) => column.id === activeCard.tripDayId)?.date ?? null
+    : null;
+  const activeCardTimezone = activeCard
+    ? tripColumns.find((column) => column.id === activeCard.tripDayId)?.effectiveTimezone ?? null
     : null;
   const activeSavedCard = activeCard?.mode === "edit"
     ? tripColumns.flatMap((column) => column.cards).find((card) => card.id === activeCard.cardId) ?? null
@@ -568,16 +671,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   }, [activeCard]);
 
   function openCard(card: TripCard) {
-    setCardLocation({ googlePlaceId: card.googlePlaceId, googleMapsQuery: card.googleMapsQuery });
+    setCardPanel("details");
+    setCardLocation({ googlePlaceId: card.googlePlaceId, googleMapsQuery: card.googleMapsQuery, googlePlaceName: card.googlePlaceName });
     setActiveCard({ mode: "edit", cardId: card.id, tripDayId: card.tripDayId });
-    setCardDraft({ ...card, locationCategory: card.locationCategory ?? "", transportMode: card.transportMode ?? "train" });
+    setCardDraft({ ...card, departureTimezone: card.departureTimezone ?? "", arrivalTimezone: card.arrivalTimezone ?? "", locationCategory: card.locationCategory ?? "", transportMode: card.transportMode ?? "train" });
     setCardErrorFor(null);
   }
 
   function addCard(tripDayId: string) {
+    setCardPanel("details");
     setCardLocation({ googlePlaceId: null, googleMapsQuery: null });
     setActiveCard({ mode: "create", tripDayId });
-    setCardDraft({ type: "location", title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", departureTime: "", arrivalTime: "", serviceNumber: "" });
+    setCardDraft({ type: "location", title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", startLocationName: "", endLocationName: "", departureTime: "", arrivalTime: "", departureTimezone: "", arrivalTimezone: "", serviceNumber: "" });
     setCardErrorFor(null);
   }
 
@@ -597,6 +702,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
+      <CardSearch key={trip.id} tripId={trip.id} columns={tripColumns} onOpenCard={openCard} />
+      {view === "map" ? <TripMap columns={tripColumns} apiKey={googleMapsBrowserApiKey} onOpenCard={openCard} /> : <>
       <div className="board-toolbar">
       <p>{tripColumns.filter((column) => column.date !== null).length} days · {tripColumns.reduce((count, column) => count + column.cards.length, 0)} cards</p>
       <addDayFetcher.Form
@@ -648,7 +755,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       </div>
       <CardDragBoard onMove={submitMove}>
       <section
-        className="planning-board"
+        className="planning-board auto-cols-[min(--spacing(80),90%)]"
         aria-label={`${trip.title} planning board`}
       >
         {displayedColumns.map((column) => column.date === null ? (
@@ -657,6 +764,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <DayColumn
             column={{ ...column, date: column.date }}
             tripId={trip.id}
+            tripTimezone={trip.timezone}
             confirmedStays={confirmedStays}
             key={column.id}
             onAddCard={addCard}
@@ -666,6 +774,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         ))}
       </section>
       </CardDragBoard>
+      </>}
 
       {activeCard && (
         <div
@@ -675,7 +784,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           }}
         >
           <section
-            className={`ui-dialog ${cardDraft.type === "transport" ? "max-w-2xl" : "max-w-lg"}`}
+            className="ui-dialog w-3xl max-w-9/10"
             role="dialog"
             aria-modal="true"
             aria-labelledby="card-dialog-heading"
@@ -700,6 +809,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               </button>
             </div>
 
+            {activeCard.mode === "edit" && <div className="card-dialog-panels" role="group" aria-label="Card view">
+              <button type="button" className="ui-button" aria-pressed={cardPanel === "details"} onClick={() => setCardPanel("details")}>Details</button>
+              <button type="button" className="ui-button" aria-pressed={cardPanel === "chat"} onClick={() => setCardPanel("chat")}>Chat</button>
+            </div>}
+
+            <div hidden={cardPanel !== "details"}>
             <cardFetcher.Form
               className="ui-form"
               method="post"
@@ -737,32 +852,54 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               </label>
 
               {cardDraft.type === "transport" && <>
+                <p className="text-xs text-muted-foreground">Times use {activeCardTimezone ?? "your device’s time zone (no trip or day time zone set)"}.</p>
+                <input type="hidden" name="transportUtcOffset" value={activeCardDate && (cardDraft.departureTime || cardDraft.arrivalTime)
+                  ? new Date(`${activeCardDate}T${cardDraft.departureTime || cardDraft.arrivalTime}:00`).getTimezoneOffset()
+                  : ""} />
                 <label className="ui-field">Mode of transport
                   <select className="ui-input" name="transportMode" value={cardDraft.transportMode} onChange={(event) => setCardDraft((draft) => ({ ...draft, transportMode: event.target.value }))}>
                     {Object.entries(transportModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
                 {([ ["startLocation", "Start location"], ["endLocation", "End location"] ] as const).map(([field, label]) => (
-                  <label key={field} className="ui-field">{label}
-                    <input className="ui-input" name={field} required value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
-                  </label>
+                  <TransportLocationPicker key={`${activeCardKey}:${field}`} tripId={trip.id}
+                    name={field} label={label} value={cardDraft[field]} placeName={cardDraft[`${field}Name`]}
+                    onChange={(value, placeName) => setCardDraft((draft) => ({ ...draft, [field]: value, [`${field}Name`]: placeName }))}
+                    disabled={cardFetcher.state !== "idle"}
+                  />
                 ))}
                 <details>
                   <summary className="ui-label cursor-pointer">Times and service details</summary>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {([ ["departureTime", "Departure time"], ["arrivalTime", "Arrival time"], ["serviceNumber", "Service number"] ] as const).map(([field, label]) => (
-                      <label key={field} className="ui-field">{label}
-                        <input className="ui-input" name={field} type={field === "serviceNumber" ? "text" : "time"} value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
-                      </label>
+                    {([ ["departureTime", "departureTimezone", "Departure"], ["arrivalTime", "arrivalTimezone", "Arrival"] ] as const).map(([field, zoneField, label]) => (
+                      <div key={field} className="grid gap-3">
+                        <label className="ui-field">{label} time
+                          <input className="ui-input" name={field} type="time" value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
+                        </label>
+                        <TimezoneField name={zoneField} label={`${label} time zone (optional)`}
+                          timezone={cardDraft[zoneField]} placeholder={activeCardTimezone ? `Default: ${activeCardTimezone}` : "Use device time zone"}
+                          onChange={(value) => setCardDraft((draft) => ({ ...draft, [zoneField]: value }))} disabled={cardFetcher.state !== "idle"} />
+                      </div>
                     ))}
+                    <label className="ui-field">Service number
+                      <input className="ui-input" name="serviceNumber" value={cardDraft.serviceNumber} onChange={(event) => setCardDraft((draft) => ({ ...draft, serviceNumber: event.target.value }))} />
+                    </label>
                   </div>
                 </details>
-                {(cardDraft.transportMode === "train" || cardDraft.transportMode === "subway") && (
+                <p className="text-xs text-muted-foreground">Each time uses its own time zone override, or defaults to {activeCardTimezone ?? "your device’s time zone"}. Clear an override to use the default; entered clock times stay the same. Travel time is estimated when you save; departure takes priority when both times are entered.</p>
+                {activeSavedCard?.transportEstimate && (
+                  <div className="grid gap-1">
+                    <p className="ui-label">Last saved travel-time estimate</p>
+                    <TransportEstimateSummary estimate={activeSavedCard.transportEstimate} />
+                  </div>
+                )}
+                {isMappableTransportMode(cardDraft.transportMode) && (
                   <TransportRouteMap
                     key={`route:${activeCardKey}`}
                     apiKey={googleMapsBrowserApiKey}
                     arrivalTime={cardDraft.arrivalTime}
                     date={activeCardDate}
+                    timezone={transportTimezone(cardDraft, activeCardTimezone)}
                     departureTime={cardDraft.departureTime}
                     destination={cardDraft.endLocation}
                     mode={cardDraft.transportMode}
@@ -809,6 +946,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 </label>
               )}
 
+              {cardDraft.type === "hike" && (
+                <HikeGpxEditor key={`gpx:${activeCardKey}`} tripId={trip.id}
+                  attachment={activeSavedCard?.attachments.find((item) => item.contentType === GPX_CONTENT_TYPE)}
+                  distanceKm={activeSavedCard?.hikeDistanceKm ?? null} elevationGainM={activeSavedCard?.hikeElevationGainM ?? null}
+                  disabled={cardFetcher.state !== "idle"} />
+              )}
+
               {cardDraft.type === "city" && (
                 <>
                   {activeSavedCard && activeSavedCard.cityLocations.length > 0 && (
@@ -834,27 +978,28 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 >
                   Description
                 </label>
-                <textarea
-                  className="ui-input min-h-32 resize-y"
+                <MarkdownEditor
+                  key={activeCardKey}
                   id="card-description"
                   name="description"
                   value={cardDraft.description}
-                  onChange={(event) =>
+                  disabled={cardFetcher.state !== "idle"}
+                  onChange={(description) =>
                     setCardDraft((draft) => ({
                       ...draft,
-                      description: event.target.value,
+                      description,
                     }))
                   }
                 />
               </div>
 
               <CardAttachments key={`attachments:${activeCardKey}`} tripId={trip.id}
-                attachments={activeCard.mode === "edit" ? tripColumns.flatMap((column) => column.cards).find((card) => card.id === activeCard.cardId)?.attachments ?? [] : []}
+                attachments={activeSavedCard?.attachments.filter((item) => item.contentType !== GPX_CONTENT_TYPE) ?? []}
                 coverAttachmentId={activeCard.mode === "edit" ? tripColumns.flatMap((column) => column.cards).find((card) => card.id === activeCard.cardId)?.coverAttachmentId ?? null : null}
                 allowCover={cardDraft.type === "location"}
                 disabled={cardFetcher.state !== "idle"} />
 
-              {cardDraft.type === "location" && <CardLocationPicker key={activeCardKey} tripId={trip.id} location={cardLocation} onChange={setCardLocation} disabled={cardFetcher.state !== "idle"} />}
+              {(cardDraft.type === "location" || cardDraft.type === "hike") && <CardLocationPicker key={activeCardKey} tripId={trip.id} location={cardLocation} onChange={setCardLocation} disabled={cardFetcher.state !== "idle"} />}
               </>}
 
               {cardErrorFor === activeCardKey && cardFetcher.data?.error && (
@@ -894,9 +1039,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 </button>
               </div>
             </cardFetcher.Form>
+            </div>
+            {activeCard.mode === "edit" && activeSavedCard && <div hidden={cardPanel !== "chat"}>
+              <CardChat key={activeCard.cardId} tripId={trip.id} cardId={activeCard.cardId} type={activeSavedCard.type}
+                active={cardPanel === "chat"} date={activeCardDate} timezone={activeCardTimezone} />
+            </div>}
           </section>
         </div>
       )}
     </>
   );
+}
+
+export default function Home({ loaderData }: Route.ComponentProps) {
+  return <TripPage loaderData={loaderData} />;
 }

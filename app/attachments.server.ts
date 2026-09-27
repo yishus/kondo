@@ -3,9 +3,10 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { data } from "react-router";
 import { v7 as uuidv7 } from "uuid";
 
-import { attachmentFileError, MAX_ATTACHMENTS } from "./attachments";
+import { attachmentFileError, isImageAttachment, MAX_ATTACHMENTS } from "./attachments";
 import type { Database } from "./db.server";
-import { cardAttachments } from "./db/schema";
+import { cardAttachments, cards } from "./db/schema";
+import { GPX_CONTENT_TYPE, gpxFileError, parseGpx, type HikeTrack } from "./hike-gpx";
 
 export const attachmentKey = (cardId: string, id: string) => `cards/${cardId}/${id}`;
 
@@ -15,45 +16,71 @@ export async function saveCardWithAttachments(
   cardId: string,
   form: FormData,
   mutation: (coverAttachmentId: string | null) => BatchItem<"sqlite"> | BatchItem<"sqlite">[],
-  options: { allowCover: boolean; currentCoverAttachmentId?: string | null },
+  options: { allowCover: boolean; currentCoverAttachmentId?: string | null; allowGpx?: boolean },
 ) {
   const fail = (error: string, status = 400) => data({ ok: false as const, error }, { status });
   const fields = form.getAll("attachments");
-  if (fields.some((field) => typeof field === "string" && field !== "")) return fail("Choose JPG or PDF files only.");
+  if (fields.some((field) => typeof field === "string" && field !== "")) return fail("Choose JPG, PNG or PDF files only.");
   // An unselected input is an unnamed File or an empty string, depending on
   // the runtime's multipart parser. Neither represents an upload.
   const files = fields.filter((field): field is File => typeof field !== "string")
     .filter((file) => file.name || file.size);
   const existing = await db.select().from(cardAttachments).where(eq(cardAttachments.cardId, cardId));
   const removedIds = [...new Set(form.getAll("removeAttachmentId"))];
-  if (removedIds.some((id) => typeof id !== "string" || !existing.some((item) => item.id === id))) {
+  if (removedIds.some((id) => typeof id !== "string" || !existing.some((item) => item.id === id && item.contentType !== GPX_CONTENT_TYPE))) {
     return fail("That attachment no longer exists on this card. Reopen the card and try again.");
   }
-  if (existing.length - removedIds.length + files.length > MAX_ATTACHMENTS) {
+  if (existing.filter((item) => item.contentType !== GPX_CONTENT_TYPE).length - removedIds.length + files.length > MAX_ATTACHMENTS) {
     return fail(`A card can have up to ${MAX_ATTACHMENTS} attachments.`);
   }
+
   const uploads = [];
   for (const file of files) {
     const error = attachmentFileError(file);
     if (error) return fail(error);
-    const signature = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+    const signature = new Uint8Array(await file.slice(0, 8).arrayBuffer());
     const pdf = /\.pdf$/i.test(file.name);
+    const png = /\.png$/i.test(file.name);
     const valid = pdf
-      ? new TextDecoder().decode(signature) === "%PDF-"
-      : signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff;
-    if (!valid) return fail(`“${file.name}” is not a valid ${pdf ? "PDF" : "JPG"} file.`);
+      ? new TextDecoder().decode(signature.slice(0, 5)) === "%PDF-"
+      : png
+        ? [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => signature[index] === byte)
+        : signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff;
+    if (!valid) return fail(`“${file.name}” is not a valid ${pdf ? "PDF" : png ? "PNG" : "JPG"} file.`);
     uploads.push({
       file, id: uuidv7(), cardId,
-      filename: Array.from(file.name.split(/[\\/]/).at(-1)!.replace(/[\u0000-\u001f\u007f]/g, "")).slice(0, 200).join("") || (pdf ? "attachment.pdf" : "attachment.jpg"),
-      contentType: pdf ? "application/pdf" : "image/jpeg", size: file.size,
+      filename: Array.from(file.name.split(/[\\/]/).at(-1)!.replace(/[\u0000-\u001f\u007f]/g, "")).slice(0, 200).join("") || (pdf ? "attachment.pdf" : png ? "attachment.png" : "attachment.jpg"),
+      contentType: pdf ? "application/pdf" : png ? "image/png" : "image/jpeg", size: file.size,
     });
   }
+
+  const gpxFields = form.getAll("gpx").filter((field) => typeof field === "string" ? field !== "" : field.name || field.size);
+  const removeGpx = form.get("removeGpx") === "1";
+  if ((gpxFields.length || removeGpx) && !options.allowGpx) return fail("GPX files can only be uploaded to hike cards.");
+  if (gpxFields.length > 1 || gpxFields.some((field) => typeof field === "string")) return fail("Choose one GPX file.");
+  const gpxFile = gpxFields[0] as File | undefined;
+  let track: HikeTrack | undefined;
+  if (gpxFile) {
+    const error = gpxFileError(gpxFile);
+    if (error) return fail(error);
+    try {
+      track = parseGpx(await gpxFile.text());
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : "Could not read the GPX file.");
+    }
+    uploads.push({
+      file: gpxFile, id: uuidv7(), cardId,
+      filename: Array.from(gpxFile.name.split(/[\\/]/).at(-1)!.replace(/[\u0000-\u001f\u007f]/g, "")).slice(0, 200).join("") || "hike.gpx",
+      contentType: GPX_CONTENT_TYPE, size: gpxFile.size,
+    });
+  }
+  if (gpxFile || removeGpx) removedIds.push(...existing.filter((item) => item.contentType === GPX_CONTENT_TYPE).map((item) => item.id));
 
   let coverAttachmentId: string | null = null;
   if (options.allowCover) {
     const coverField = form.get("coverAttachment");
     if (coverField !== null && typeof coverField !== "string") {
-      return fail("Choose a valid JPG cover image.");
+      return fail("Choose a valid JPG or PNG cover image.");
     }
     const coverChoice = typeof coverField === "string"
       ? coverField
@@ -63,19 +90,19 @@ export async function saveCardWithAttachments(
     if (coverChoice.startsWith("existing:")) {
       const id = coverChoice.slice("existing:".length);
       const attachment = existing.find((item) => item.id === id);
-      if (!attachment || attachment.contentType !== "image/jpeg") {
-        return fail("Choose a valid JPG cover image.");
+      if (!attachment || !isImageAttachment(attachment.contentType)) {
+        return fail("Choose a valid JPG or PNG cover image.");
       }
       if (!removedIds.includes(id)) coverAttachmentId = id;
     } else if (coverChoice.startsWith("upload:")) {
       const index = Number(coverChoice.slice("upload:".length));
       const upload = Number.isInteger(index) ? uploads[index] : undefined;
-      if (!upload || upload.contentType !== "image/jpeg") {
-        return fail("Choose a valid JPG cover image.");
+      if (!upload || !isImageAttachment(upload.contentType)) {
+        return fail("Choose a valid JPG or PNG cover image.");
       }
       coverAttachmentId = upload.id;
     } else if (coverChoice) {
-      return fail("Choose a valid JPG cover image.");
+      return fail("Choose a valid JPG or PNG cover image.");
     }
   }
 
@@ -94,10 +121,14 @@ export async function saveCardWithAttachments(
     await db.batch([
       firstMutation,
       ...remainingMutations,
-      ...uploads.map(({ file, ...metadata }) => db.insert(cardAttachments).values(metadata)),
+      ...(gpxFile || removeGpx ? [db.update(cards).set({
+        hikeDistanceKm: track?.hikeDistanceKm ?? null,
+        hikeElevationGainM: track?.hikeElevationGainM ?? null,
+      }).where(eq(cards.id, cardId))] : []),
       ...(removedIds.length ? [db.delete(cardAttachments).where(and(
         eq(cardAttachments.cardId, cardId), inArray(cardAttachments.id, removedIds as string[]),
       ))] : []),
+      ...uploads.map(({ file, ...metadata }) => db.insert(cardAttachments).values(metadata)),
     ]);
   } catch (error) {
     console.error("Could not save card and attachments", error);

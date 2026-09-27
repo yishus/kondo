@@ -37,6 +37,9 @@ export async function moveCard(db: Database, tripId: string, form: FormData) {
   if (beforeCardId === card.id) return { ok: true as const, error: null };
 
   const reordered = insertCard(destinationCards, { ...card, tripDayId }, beforeCardId);
+  if (card.tripDayId === tripDayId && reordered.every((item, index) => item.id === destinationCards[index]?.id)) {
+    return { ok: true as const, error: null };
+  }
   const sourceCards = dayCards.filter((item) => item.tripDayId === card.tripDayId && item.id !== card.id);
   const otherPositions = [
     ...reordered.map((item, position) => ({ ...item, position })).filter((item) => item.id !== card.id),
@@ -52,6 +55,13 @@ export async function moveCard(db: Database, tripId: string, form: FormData) {
       updatedAt: sql`CURRENT_TIMESTAMP`,
     }).where(and(eq(cards.id, card.id), eq(cards.tripId, tripId), inDay(card.tripDayId)))
       .returning({ id: cards.id }),
+    // Remove just this card's label, preserving all other saved times and the
+    // start time. JSON is edited in SQL so a concurrent refresh isn't overwritten
+    // with an older snapshot. changes() refers to the card update immediately above.
+    db.update(tripDays).set({ timeEstimate: sql`json_set(${tripDays.timeEstimate}, '$.labels', json((
+      SELECT json_group_array(json(value)) FROM json_each(${tripDays.timeEstimate}, '$.labels')
+      WHERE json_extract(value, '$.afterCardId') != ${card.id}
+    )))` }).where(and(eq(tripDays.tripId, tripId), sql`${tripDays.timeEstimate} IS NOT NULL`, sql`changes() > 0`)),
     ...otherPositions.map((item) => db.update(cards).set({ position: item.position })
       .where(and(eq(cards.id, item.id), eq(cards.tripId, tripId), inDay(item.tripDayId)))),
   ]);

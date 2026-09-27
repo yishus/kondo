@@ -74,7 +74,7 @@ export async function accommodationAction(db: Database, bucket: R2Bucket, tripId
     id: uuidv7(), accommodationId: id, size: file.size,
     filename: Array.from(file.name.split(/[\\/]/).at(-1)!.replace(/[\u0000-\u001f\u007f]/g, "")).slice(0, 200).join("") || "booking.pdf",
   } : null;
-  const values = { ...parsed.value!, ...location.location };
+  const values = { ...parsed.value!, googlePlaceId: location.location.googlePlaceId, googleMapsQuery: location.location.googleMapsQuery };
   try {
     if (file && upload) await bucket.put(documentKey(id, upload.id), file.stream(), { httpMetadata: { contentType: "application/pdf" } });
     await db.batch([

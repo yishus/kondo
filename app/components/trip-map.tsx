@@ -1,0 +1,149 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Map as LeafletMap } from "leaflet";
+import type { TripColumn, TripCard } from "../card-order";
+import { loadGoogleMaps } from "../google-maps";
+import { resolveTripMap, tripMapEntries, validMapPoint, wrapMapEntries, type MapPoint, type ResolvedMapEntry } from "../trip-map";
+import { Icon } from "./icon";
+
+type Place = {
+  location?: { lat(): number; lng(): number };
+  fetchFields(options: { fields: string[] }): Promise<unknown>;
+};
+type PlaceConstructor = {
+  new (options: { id: string }): Place;
+};
+
+function withTimeout<T>(promise: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("Map lookup timed out")), 12_000);
+    promise.then(resolve, reject).finally(() => clearTimeout(timeout));
+  });
+}
+
+export function TripMap({ columns, apiKey, onOpenCard }: {
+  columns: TripColumn[];
+  apiKey: string;
+  onOpenCard: (card: TripCard) => void;
+}) {
+  const container = useRef<HTMLDivElement>(null);
+  const fitRef = useRef<() => void>(() => {});
+  const openRef = useRef(onOpenCard);
+  const columnsRef = useRef(columns);
+  openRef.current = onOpenCard;
+  columnsRef.current = columns;
+  const cache = useRef(new Map<string, MapPoint>());
+  const entries = useMemo(() => tripMapEntries(columns), [columns]);
+  const [resolved, setResolved] = useState<ResolvedMapEntry[]>([]);
+  const [status, setStatus] = useState("Loading trip map…");
+  const [attempt, setAttempt] = useState(0);
+  const [ready, setReady] = useState(false);
+
+  function open(cardId: string) {
+    const card = columnsRef.current.flatMap((column) => column.cards).find((card) => card.id === cardId);
+    if (card) openRef.current(card);
+  }
+
+  useEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    const controller = new AbortController();
+    let map: LeafletMap | undefined;
+    let resize: ResizeObserver | undefined;
+    setReady(false);
+    setResolved([]);
+    setStatus("Loading trip map…");
+    void (async () => {
+      try {
+        const L = await import("leaflet");
+        if (controller.signal.aborted) return;
+        map = L.map(element, { scrollWheelZoom: false }).setView([20, 0], 2);
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(map);
+        resize = new ResizeObserver(() => map?.invalidateSize());
+        resize.observe(element);
+        let Place: PlaceConstructor | undefined;
+        if (apiKey && entries.some((entry) => entry.placeId)) {
+          const library = await withTimeout(loadGoogleMaps(apiKey).then((maps) => maps.importLibrary("places")));
+          Place = library.Place as PlaceConstructor;
+        }
+        const result = wrapMapEntries(await resolveTripMap(entries, async (placeId) => {
+          const cached = cache.current.get(placeId);
+          if (cached) return cached;
+          if (!Place) return null;
+          const place = new Place({ id: placeId });
+          await withTimeout(place.fetchFields({ fields: ["location"] }));
+          if (!place?.location) return null;
+          const point: MapPoint = [place.location.lat(), place.location.lng()];
+          if (validMapPoint(point)) cache.current.set(placeId, point);
+          return point;
+        }, controller.signal));
+        if (controller.signal.aborted) return;
+        const allPoints = result.flatMap((entry) => entry.point ? [entry.point] : []);
+        for (const entry of result) {
+          if (!entry.point) continue;
+          const title = `${entry.title} · ${entry.day}`;
+          const tooltip = document.createElement("span");
+          tooltip.textContent = title;
+          const pin = document.createElement("span");
+          pin.className = `trip-map-pin${entry.type === "hike" ? " trip-map-pin-hike" : ""}`;
+          pin.textContent = "●";
+          const marker = L.marker(entry.point, { title, alt: `Open ${title}`, keyboard: true,
+            icon: L.divIcon({ className: "trip-map-marker", html: pin, iconSize: [28, 36], iconAnchor: [14, 36] }),
+          }).bindTooltip(tooltip).on("click", () => open(entry.cardId)).addTo(map);
+          marker.getElement()?.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault(); event.stopPropagation(); open(entry.cardId);
+            }
+          });
+        }
+
+        fitRef.current = () => {
+          if (allPoints.length) map?.fitBounds(L.latLngBounds(allPoints), { padding: [40, 40], maxZoom: 14 });
+        };
+        fitRef.current();
+        setResolved(result);
+        setReady(true);
+        const pins = result.filter((entry) => entry.point).length;
+        const missing = result.filter((entry) => entry.error).length;
+        setStatus(!apiKey && entries.length ? "Map locations are unavailable right now. You can still open and edit every card below."
+          : `${pins} location ${pins === 1 ? "pin" : "pins"}${missing ? ` · ${missing} cards could not be mapped` : ""}`);
+
+      } catch {
+        if (!controller.signal.aborted) setStatus("The map could not be fully loaded. Retry, or open a card from the list below.");
+      }
+    })();
+    return () => {
+      controller.abort(); resize?.disconnect(); map?.remove(); fitRef.current = () => {};
+    };
+  }, [entries, apiKey, attempt]);
+
+  return <section aria-label="Trip map" className="grid gap-4">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="text-sm font-medium" role="status">{status}</p>
+        <p className="mt-1 text-xs text-muted-foreground">Click a pin to edit its card. Locations are blue; hikes are green. All trip days and Unscheduled are included.</p>
+      </div>
+      <div className="flex gap-2">
+        <button type="button" className="ui-button ui-button-outline" onClick={() => fitRef.current()} disabled={!ready || !resolved.some((entry) => entry.point)}>Fit all</button>
+        <button type="button" className="ui-button ui-button-outline" onClick={() => setAttempt((value) => value + 1)}>Retry map</button>
+      </div>
+    </div>
+    <div className="relative isolate overflow-hidden rounded-xl border border-border bg-muted">
+      <div ref={container} className="h-[60vh] min-h-80 w-full" aria-label="Location pins" />
+    </div>
+    {entries.length === 0 ? <p className="text-sm text-muted-foreground">Add location or hike cards in the Itinerary tab to see them here.</p> :
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label="Map cards">
+        {entries.map((entry) => {
+          const result = resolved.find((item) => item.cardId === entry.cardId);
+          return <button key={entry.cardId} type="button" className="ui-button ui-button-outline flex w-full min-w-0 items-start justify-start gap-3 text-left" onClick={() => open(entry.cardId)}>
+            <Icon name="pin" className={`shrink-0 ${entry.type === "hike" ? "text-green-700" : "text-blue-600"}`} />
+            <span className="min-w-0 flex-1"><span className="block wrap-anywhere">{entry.title}</span>
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">{entry.day} · {entry.type === "hike" ? "Hike" : "Location"}</span>
+              {result?.error && <span className="mt-1 block text-xs font-normal text-muted-foreground">{result.error}</span>}
+            </span>
+          </button>;
+        })}
+      </div>}
+  </section>;
+}

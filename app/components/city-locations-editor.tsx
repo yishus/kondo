@@ -23,6 +23,7 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
   const [items, setItems] = useState<CityLocationDraft[]>(() => locations.map((location) => ({
     googlePlaceId: location.googlePlaceId,
     googleMapsQuery: location.googleMapsQuery,
+    googlePlaceName: location.googlePlaceName,
     locationType: location.locationType,
   })));
   const [query, setQuery] = useState("");
@@ -89,6 +90,7 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
     setItems((current) => [...current, {
       googlePlaceId: place.id,
       googleMapsQuery: query.trim(),
+      googlePlaceName: place.name,
       locationType: type,
     }]);
     setQuery("");
@@ -108,7 +110,7 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
                 <span className="grid size-6 shrink-0 place-items-center text-xs text-muted-foreground">{index + 1}</span>
                 <div className="min-w-0 flex-1">
                   <a className="text-[13px] font-medium break-words text-primary hover:underline" href={googleMapsUrl(item.googlePlaceId, item.googleMapsQuery)} target="_blank" rel="noopener noreferrer">
-                    {item.googleMapsQuery} <span aria-hidden="true">↗</span>
+                    {item.googlePlaceName || item.googleMapsQuery} <span aria-hidden="true">↗</span>
                   </a>
                   <label className="ui-field mt-2">
                     Location type

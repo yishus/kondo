@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import {
   isRouteErrorResponse,
   Links,
@@ -11,7 +12,13 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { ThemeProvider, themeScript } from "./components/theme";
 
+export function loader() {
+  const mapsEnv = env as typeof env & { THUNDERFOREST_API_KEY?: string };
+  return { thunderforestApiKey: mapsEnv.THUNDERFOREST_API_KEY?.trim() ?? "" };
+}
+
 export const links: Route.LinksFunction = () => [
+  { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",

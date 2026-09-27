@@ -4,9 +4,11 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable("user", {
@@ -110,6 +112,7 @@ export const trips = sqliteTable("trips", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description").notNull().default(""),
+  timezone: text("timezone"),
 });
 
 export const tripOwners = sqliteTable(
@@ -137,6 +140,8 @@ export const tripDays = sqliteTable(
       .notNull()
       .references(() => trips.id, { onDelete: "cascade" }),
     tripDate: text("trip_date").notNull(),
+    timezone: text("timezone"),
+    timeEstimate: text("time_estimate", { mode: "json" }).$type<import("../day-estimate").DayEstimate>(),
   },
   (table) => [
     unique("trip_days_trip_id_trip_date_unique").on(
@@ -161,29 +166,40 @@ export const cards = sqliteTable(
       .references(() => tripDays.id, { onDelete: "cascade" }),
     // Legacy reference kept only for upgrading existing databases.
     cityGroupId: text("city_group_id").references(() => dayCityGroups.id),
-    type: text("type", { enum: ["location", "city", "transport"] }).notNull().default("location"),
+    // The legacy type column remains for migration compatibility.
+    type: text("card_type", { enum: ["location", "hike", "city", "transport"] }).notNull().default("location"),
     transportMode: text("transport_mode"),
     startLocation: text("start_location").notNull().default(""),
     endLocation: text("end_location").notNull().default(""),
+    startLocationName: text("start_location_name").notNull().default(""),
+    endLocationName: text("end_location_name").notNull().default(""),
     departureTime: text("departure_time").notNull().default(""),
     arrivalTime: text("arrival_time").notNull().default(""),
+    departureTimezone: text("departure_timezone"),
+    arrivalTimezone: text("arrival_timezone"),
     serviceNumber: text("service_number").notNull().default(""),
+    transportEstimate: text("transport_estimate", { mode: "json" }).$type<import("../transport-estimate").TransportEstimate>(),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
     position: integer("position").notNull().default(0),
     googlePlaceId: text("google_place_id"),
     googleMapsQuery: text("google_maps_query"),
+    googlePlaceName: text("google_place_name"),
     // The original location_category column had a fixed database constraint.
     // Store evolving subcategories here so adding choices does not require a
     // destructive cards-table rebuild.
-    locationCategory: text("location_subcategory", { enum: ["place_of_interest", "food", "hike"] }),
+    locationCategory: text("location_subcategory", { enum: ["place_of_interest", "food"] }),
+    hikeDistanceKm: real("hike_distance_km"),
+    hikeElevationGainM: real("hike_elevation_gain_m"),
     coverAttachmentId: text("cover_attachment_id"),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    check("cards_type_check", sql`${table.type} IN ('location', 'city', 'transport')`),
+    check("cards_type_check", sql`${table.type} IN ('location', 'hike', 'city', 'transport')`),
     check("cards_title_check", sql`length(trim(${table.title})) > 0`),
     check("cards_position_check", sql`${table.position} >= 0`),
+    check("cards_hike_distance_check", sql`${table.hikeDistanceKm} >= 0`),
+    check("cards_hike_elevation_gain_check", sql`${table.hikeElevationGainM} >= 0`),
     check("cards_unscheduled_city_check", sql`${table.tripDayId} IS NOT NULL OR ${table.cityGroupId} IS NULL`),
     index("cards_trip_day_position_idx").on(table.tripDayId, table.position),
     index("cards_trip_position_idx").on(table.tripId, table.tripDayId, table.position),
@@ -225,7 +241,8 @@ export const cardAttachments = sqliteTable("card_attachments", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [
   index("card_attachments_card_idx").on(table.cardId),
-  check("card_attachments_type_check", sql`${table.contentType} IN ('image/jpeg', 'application/pdf')`),
+  check("card_attachments_type_check", sql`${table.contentType} IN ('image/jpeg', 'image/png', 'application/pdf', 'application/gpx+xml')`),
+  uniqueIndex("card_attachments_one_gpx_idx").on(table.cardId).where(sql`${table.contentType} = 'application/gpx+xml'`),
   check("card_attachments_size_check", sql`${table.size} > 0 AND ${table.size} <= 10485760`),
 ]);
 
@@ -233,11 +250,23 @@ export type CardAttachment = typeof cardAttachments.$inferSelect;
 export type TripDay = typeof tripDays.$inferSelect;
 export type Card = typeof cards.$inferSelect;
 
+export const cardChats = sqliteTable("card_chats", {
+  cardId: text("card_id").notNull().references(() => cards.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  messages: text("messages", { mode: "json" }).$type<import("../card-chat").ChatMessage[]>().notNull().default([]),
+  lockId: text("lock_id"),
+  lockedUntil: integer("locked_until").notNull().default(0),
+}, (table) => [
+  primaryKey({ columns: [table.cardId, table.userId] }),
+  index("card_chats_user_idx").on(table.userId),
+]);
+
 export const cityCardLocations = sqliteTable("city_card_locations", {
   id: text("id").primaryKey(),
   cardId: text("card_id").notNull().references(() => cards.id, { onDelete: "cascade" }),
   googlePlaceId: text("google_place_id").notNull(),
   googleMapsQuery: text("google_maps_query").notNull(),
+  googlePlaceName: text("google_place_name"),
   locationType: text("location_type").notNull(),
   position: integer("position").notNull().default(0),
 }, (table) => [
@@ -292,6 +321,7 @@ export const tripTodos = sqliteTable("trip_todos", {
   id: text("id").primaryKey(),
   tripId: text("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  ownerId: text("owner_id").references(() => user.id, { onDelete: "set null" }),
   completed: integer("completed", { mode: "boolean" }).notNull().default(false),
 }, (table) => [
   index("trip_todos_trip_idx").on(table.tripId),

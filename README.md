@@ -47,11 +47,111 @@ The production schema starts with `migrations/0000_initial.sql`. Migration
 Migration `0004_expand_location_categories.sql` makes that field extensible,
 `0005_location_card_covers.sql` adds uploaded cover-image selection, and
 `0006_city_card_locations.sql` adds typed Google places to city/area cards.
+Migration `0007_hike_details.sql` adds optional hike distance (km) and elevation
+gain (m), shown below the title on hike cards.
+Migration `0008_todo_owners.sql` adds optional trip-owner tags to to-do tasks.
+Migration `0009_transport_estimate.sql` stores Google Maps travel-time estimates
+on transport cards. Saving a card with a departure or arrival time refreshes the
+estimate using its trip day and effective time zone (day override, then trip
+default, then the saving device's time zone if neither is set). Enable **Routes
+API** for the server-side `GOOGLE_MAPS_API_KEY` (the browser key is not used).
+Train, subway, tram, and bus estimates use the departure time, or arrival time
+when departure is empty. Car/taxi estimates use departure-time traffic when
+possible; arrival-only or past driving times use a labeled general estimate.
+Walking is also supported. Flights, ferries, and unspecified modes are not
+estimated. Missing routes, API errors, and a six-second timeout do not prevent
+the card from saving. Moving a card to another date hides its old estimate until
+the next save. Changing its effective time zone also hides the old estimate.
+
+Migration `0015_transport_place_names.sql` stores the short Google place names
+separately from transport addresses. Card titles use those names while routing
+keeps the full addresses. Reselect the endpoints on older cards to use short names.
+
+Migration `0012_trip_day_timezones.sql` adds optional named time zones to trips
+and days. Create a trip with just its title, then set its default zone in the
+trip's **Settings** tab. New days inherit this default. Choose **Set time zone** from a day's
+three-dot menu to change it in a small dialog. Clearing a day override restores the trip default. Existing
+trips and days start unset; changing a zone leaves entered clock times unchanged.
+Use names such as `Asia/Tokyo` or `America/New_York` so daylight saving follows
+the trip date. Route calculations decline nonexistent or repeated local times
+during clock changes instead of guessing. Separate departure/arrival time zones
+and arrival dates for travel across zones are not yet supported.
 
 Before deploying code that adds database fields, apply its migrations to the
 remote database with `bunx wrangler d1 migrations apply DB --remote`.
+Migration `0014_day_estimates.sql` adds saved day timing snapshots. Click
+**Refresh times** in the three-dot menu to the left of a day's card count to estimate
+clock times between cards.
+Durations written in titles/descriptions, entered transport times, saved route
+estimates, and hike distance/elevation are handled in code. For location cards
+without a written duration, Jev chooses café/snack (30 min), meal (60 min),
+museum/gallery (90 min), or other/unclear (60 min). Add transport
+cards to account for travel between stops. Timing starts at 09:00 unless a
+scheduled transport provides an anchor, and uses the day/trip zone or the device
+zone supplied at refresh. Each label shows its reasoning on hover.
+Snapshots survive reloads, edits, additions, and deletions; only this
+button recalculates them. Moving or reordering a card removes that card's saved
+label without recalculating other times. City/area/region cards consume no time
+and receive no time labels. Labels for deleted cards remain near the next surviving
+card (or at the end), until refresh. Refreshing an empty day clears its labels.
+
+To enable Jev, set `TYPESAFE_API_KEY` in `.dev.vars` and restart the local server.
+For production, store it with `bunx wrangler secret put TYPESAFE_API_KEY`.
+The key stays server-side. Refresh sends eligible cards' titles (up to 300
+characters), descriptions (2,000 characters), selected subcategories, and Maps
+search text (300 characters) to the
+[TypeSafe Choice API](https://docs.typesafe.ai/primitives/choice) using
+`jev-latest`. No attachments or account information are sent. Questions are batched
+eight at a time with at most two concurrent calls and an eight-second deadline
+for the whole refresh. There are no background calls or automatic retries.
+The chosen category, confidence, probability distribution, and model version
+are saved in the timing snapshot; the card's manually chosen subcategory is not
+changed. The winning category supplies a planning default without a confidence
+cutoff; domain accuracy has not yet been calibrated. Missing configuration,
+service errors, timeouts, and invalid answers use the existing local rules.
+The fallback reason is retained in the saved snapshot. Explicit durations always
+take priority.
+
 After the first release, add new numbered migrations rather than editing the
 initial migration.
+
+### Card chat with Sol and web search
+
+Saved location, hike, city/area, and transport cards have a **Chat** tab in their
+modal (on both the board and map). It uses `gpt-6-sol` through the
+[OpenAI Responses API with web search](https://developers.openai.com/api/docs/guides/tools-web-search).
+
+Apply migration `0017_card_chats.sql` using the migration command above. Set
+`OPENAI_API_KEY` in `.dev.vars` and restart development. For production, apply
+the remote migration and run `bunx wrangler secret put OPENAI_API_KEY` before
+deploying. The key needs access to GPT-6 Sol and API billing; it stays on the
+server. Without it, the Chat tab explains that chat is not configured.
+
+Each trip owner has their own saved conversation per card. Only an authenticated
+owner can read or send messages. Deleting a card or account deletes its chats.
+**New chat** clears that user's conversation. Conversations allow 20 exchanges;
+after that, start a new chat. Requests are limited to ten per user per minute,
+one pending request per conversation, and a 90-second API timeout. Failed calls
+keep the prior conversation and leave the question in the composer for retry.
+
+Every question sends the current saved card details, trip title/description,
+scheduled date, time zone, saved timing estimate, and conversation to OpenAI.
+City cards include their places; hikes include a compact GPX summary with route
+coordinates, distance and elevations. Other attachment contents are not sent.
+Save card edits before asking about them. Chats are saved in D1; API response
+storage is disabled with `store: false`. Calls only run when a user sends a
+question or chooses a suggested prompt; there are no background AI calls.
+
+For example, choose **Give me a route report for this hike on the planned day
+and time**. Sol can search for weather, closures, access, and trail conditions,
+and displays clickable inline citations and source links. Saved times are
+labeled as estimates. It asks about missing dates/times/zones, and is instructed
+to distinguish forecasts for the actual hike date from seasonal guidance or
+historical observations when no date-specific forecast exists.
+
+Run the focused mocked-API checks with `bun test tests/card-chat.test.ts`.
+After a build, run the isolated browser checks with
+`bunx playwright test tests/browser/card-chat.e2e.ts`. These do not call OpenAI.
 
 ### Authentication and trip owners
 
@@ -77,8 +177,8 @@ Rejected CAPTCHA, allowlist, duplicate-account, and validation attempts all
 receive the same public signup error; rate-limited requests retain status `429`
 and their retry header.
 
-Every new trip is owned by its creator. An owner can open the Owners panel on a
-trip and add another registered account by email; all owners have equal access.
+Every new trip is owned by its creator. An owner can open a trip's **Settings**
+tab and add another registered account by email; all owners have equal access.
 Trip lists, loaders, actions, place search, and file downloads are scoped to the
 signed-in user's ownership.
 
@@ -98,6 +198,23 @@ bunx wrangler secret put TURNSTILE_SITE_KEY
 bunx wrangler secret put TURNSTILE_SECRET_KEY
 ```
 
+### Card search
+
+The Itinerary and Map tabs include search across every card in the current trip,
+including Unscheduled. Results open the existing card editor and refresh after
+saves. Search covers titles, descriptions, selected Google place names (including
+locations inside area cards), and transport origin/destination names and addresses.
+
+Apply `0016_card_search.sql` before running this version. It adds saved place names
+and a D1 FTS5 index, backfills existing card text, and installs triggers to keep
+the index synchronized with card and area-location inserts, updates, and deletes.
+Existing places without a saved name are searchable by their original search
+text; reselect a place to save its exact Google name. Searches use literal word
+prefixes, ignore case and accents, require every word, and return up to 50 ranked
+matches scoped to the signed-in user's current trip. Searching does not call Google.
+The FTS table, source view, and triggers are managed by the SQL migration rather
+than Drizzle's schema export.
+
 ### Google Maps place search
 
 Copy `.dev.vars.example` to `.dev.vars` and set `GOOGLE_MAPS_API_KEY` to a
@@ -112,13 +229,15 @@ train and subway route previews and city/area location maps. A
 is suitable for local development. Standard browser keys need Maps JavaScript,
 Places API (New), and Routes API access plus an HTTP referrer restriction. Route previews run
 only when the user requests one, use the transport card's trip day and departure
-or arrival time, and currently interpret that time in the browser's time zone.
+or arrival time, and interpret that time in the day or trip time zone, falling
+back to the browser's time zone when neither is set.
 
 For deployment, set the Worker secret with `bunx wrangler secret put GOOGLE_MAPS_API_KEY`.
 The key is never sent to the browser. Search runs when the user clicks Search or
 presses Enter in the location field, using Text Search (New) with five results and
-only names, addresses, IDs, and attribution. Cards store the selected place ID
-and the user's search text; search result names and addresses are not stored.
+only names, addresses, IDs, and attribution. Cards store the selected place ID,
+place name, and the user's search text; transport endpoints additionally store the selected
+short name and full address for their titles and routing.
 City/area cards can store multiple selected places. Each place has a free-form
 type, with Restaurants, Coffee, and Interest offered as suggestions. Their map
 uses type-colored Advanced Markers and fetches coordinates from the saved Place
@@ -158,14 +277,43 @@ local server described below for the complete booking flow.
 The Notes tab has a per-trip to-do list and a free-form notes field. Add tasks,
 check them off, or delete them; task changes save immediately. Use Save notes to
 save the text field. Notes and to-do tables are included in the initial migration.
+Type `@` in a new task to suggest board members; choose a suggestion with the
+arrow keys and Enter or click a name. A matching `@name` is removed from the saved
+text and tags that person. Each task supports one tagged person. Click the plus
+circle on an untagged task to assign someone, or the person's initial to replace
+or remove their tag. Owner tags require migration `0008_todo_owners.sql`.
 
 ### Verification
 
-Cards support up to five JPG/JPEG or PDF attachments, 10 MB each. Attachments are
+Cards support up to five JPG/JPEG, PNG or PDF attachments, 10 MB each. Attachments are
 uploaded or removed when the card is saved; Cancel discards pending changes.
-Location cards can select one saved or newly selected JPG as their cover image;
+Location cards can select one saved or newly selected JPG or PNG as their cover image;
 PDF files cannot be covers. An uploaded cover takes priority over the Google
 Places photo fallback.
+PNG support requires migration `0010_png_card_attachments.sql`.
+Hike cards require migration `0011_hike_cards.sql`, which converts existing Hike
+locations while preserving their measurements and attachments. Hikes accept one
+GPX file (up to 10 MB) in addition to the five regular attachments. Leaflet renders
+the route over OpenStreetMap tiles, with no Google Maps key required. To enable
+the **Thunderforest Outdoors** alternative, set `THUNDERFOREST_API_KEY` in
+`.dev.vars` and restart the dev server. For production, configure it with
+`bunx wrangler secret put THUNDERFOREST_API_KEY`. Get a key from your
+[Thunderforest dashboard](https://www.thunderforest.com/docs/apikeys/).
+This key is sent to the browser for direct tile requests. The map's top-right
+layer picker switches between OpenStreetMap (the default) and Outdoors without
+resetting the route or map position. On compact cards, open the layers icon to
+see the choices. Without a key, hikes continue to use OpenStreetMap.
+Length is
+the sum of distances between consecutive points within each segment; elevation
+gain sums uphill changes without joining separate segments. Missing elevation
+data is shown as unavailable. Tracks take precedence over routes when both are
+present. Uploading a replacement GPX recalculates both values; removing it clears
+them. Recorded GPS/elevation noise can affect these measurements.
+Hikes can also select a Google location and appear as green pins in the trip's
+Map tab (location cards use blue pins). Elevation profiles appear only in the
+card modal. Hover, touch, or use arrow keys on a profile to highlight the same
+recorded sample on both the chart and route map. Samples without elevation do
+not show a cursor.
 File bytes use the `ATTACHMENTS` R2 binding and metadata uses D1. With the local
 dev server, both are persisted under `.wrangler/state`; no bucket creation or
 cloud credentials are needed. Apply local migrations and restart the dev server
@@ -182,12 +330,26 @@ bun run build
 
 Each day contains a single ordered list of cards:
 
-- **Location**: title, optional subcategory (Place of interest, Food, or Hike),
+- **Location**: title, optional subcategory (Place of interest or Food),
   description, Google Maps location, and attachments.
+- **Hike**: title, description, GPX route map with length and elevation gain,
+  and JPG, PNG or PDF attachments.
 - **City / area / region**: a name plus multiple typed Google places displayed
   together on a color-coded map, independently movable like any other card.
 - **Transport**: mode (including train and subway), start and end locations, with
-  optional times, service number, notes, and attachments.
+  optional times, separate departure and arrival time zone overrides, service
+  number, notes, and attachments. Blank overrides inherit the day/trip time zone,
+  or the device time zone if neither is set. Changing a zone preserves entered
+  clock times. Route previews and estimates use departure when both times are set.
+  Transport time zone overrides require migration `0013_transport_timezones.sql`.
+
+The **Map** tab shows location-card pins across every day and Unscheduled.
+Click a pin or a card in the list to open the same editable card modal as the
+itinerary. The map uses Leaflet and OpenStreetMap tiles with the existing Google
+Maps browser key and Places API (New) to resolve saved Google place IDs.
+Cards without a saved location or with failed lookups remain available in the
+list. Lookups are deduplicated, limited to four at once, and cached in memory
+while the map view is open. No migration is needed for the map tab.
 
 Choose a type when adding a card. Drag any card with a mouse or touch. For
 keyboard movement, focus its handle, press Space, use up/down to choose a
@@ -207,6 +369,19 @@ drag_test_state=$(mktemp -d)
 bunx wrangler d1 migrations apply DB --local --persist-to "$drag_test_state"
 bunx wrangler dev --config build/server/wrangler.json --local --persist-to "$drag_test_state" --port 5174
 ```
+
+For the map browser test, seed the isolated D1 SQLite file (the long `.sqlite`
+filename under `$drag_test_state/v3/d1/miniflare-D1DatabaseObject/`, not
+`metadata.sqlite`) with:
+
+```bash
+bun tests/browser/seed-map-user.ts /path/to/isolated/database.sqlite
+```
+
+The map test mocks Google coordinates and map tiles; it exercises the real
+Leaflet renderer, card saves, and tab navigation without API calls. Configure a
+non-empty `GOOGLE_MAPS_BROWSER_API_KEY` in the local test server; the mocked API
+does not use its value.
 
 In another terminal, run `bunx playwright test`. Stop the test server with Ctrl-C
 when finished. Set `PLAYWRIGHT_BASE_URL` to use a different test server. The
