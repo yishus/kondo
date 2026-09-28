@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { useRouteLoaderData } from "react-router";
 import type { Map as LeafletMap, CircleMarker } from "leaflet";
 import type { loader as rootLoader } from "../root";
-import { parseGpx, type HikeTrack } from "../hike-gpx";
+import type { HikeTrack } from "../hike-gpx";
+import type { loader as tripLoader } from "../routes/trip-layout";
+import { loadHikeTrack } from "../hike-track-cache";
 import { HikeElevationProfile } from "./hike-elevation-profile";
 import type { HikeProfilePoint } from "../hike-profile";
 
 export function HikeMap({ url, track, compact = false }: { url?: string; track?: HikeTrack; compact?: boolean }) {
   const thunderforestApiKey = useRouteLoaderData<typeof rootLoader>("root")?.thunderforestApiKey ?? "";
+  const userId = useRouteLoaderData<typeof tripLoader>("routes/trip-layout")?.currentUser.id ?? "";
   const container = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState("Loading hike map…");
   const cursor = useRef<CircleMarker | null>(null);
@@ -34,9 +37,7 @@ export function HikeMap({ url, track, compact = false }: { url?: string; track?:
         let route = track;
         if (!route) {
           if (!url) return;
-          const response = await fetch(url, { signal: controller.signal });
-          if (!response.ok) throw new Error("Could not load the GPX file.");
-          route = parseGpx(await response.text());
+          route = await loadHikeTrack(url, userId);
           if (controller.signal.aborted) return;
           setLoadedTrack({ url, track: route });
         }
@@ -73,7 +74,7 @@ export function HikeMap({ url, track, compact = false }: { url?: string; track?:
     }
     void render();
     return () => { controller.abort(); resize?.disconnect(); cursor.current = null; map?.remove(); };
-  }, [url, track, thunderforestApiKey, compact]);
+  }, [url, track, thunderforestApiKey, compact, userId]);
 
   return <div className="overflow-hidden rounded-lg border border-border">
     <div className="relative isolate">

@@ -96,10 +96,12 @@ State which local date, time and time zone you used. Saved timing is an estimate
 Check forecast validity dates. If the hike is beyond the published forecast horizon, say a date-specific forecast is not available and label seasonal guidance separately; do not pass off today's weather or climatology as the forecast. For past dates seek historical observations. Include source update dates when available. Never claim you searched if no web search was performed.
 You cannot edit cards or book anything. Only attachment names and an optional GPX summary are provided; do not claim to have read images or PDFs. Keep responses focused on the user's question.`;
 
-type ApiResponse = {
+export type ApiResponse = {
   status?: string;
   output?: {
     type: string;
+    name?: string;
+    arguments?: string;
     content?: {
       type: string; text?: string; refusal?: string;
       annotations?: { type: string; url: string; title: string; start_index: number; end_index: number }[];
@@ -134,6 +136,19 @@ export function parseCardChatResponse(response: ApiResponse): Pick<ChatMessage, 
 export async function generateCardChatReply({ apiKey, context, messages, signal, fetcher = fetch, now = new Date() }: {
   apiKey: string; context: unknown; messages: ChatMessage[]; signal?: AbortSignal; fetcher?: typeof fetch; now?: Date;
 }) {
+  return parseCardChatResponse(await requestChatResponse({ apiKey, signal, fetcher, now, instructions,
+    tools: [{ type: "web_search" }],
+    input: [
+      { role: "user", content: `Current saved card context (JSON data):\n${JSON.stringify(context)}` },
+      ...messages.map((message) => ({ role: message.role, content: message.text })),
+    ],
+  }));
+}
+
+export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now = new Date(), instructions, tools, input }: {
+  apiKey: string; signal?: AbortSignal; fetcher?: typeof fetch; now?: Date;
+  instructions: string; tools: unknown[]; input: { role: string; content: string }[];
+}): Promise<ApiResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90_000);
   const abort = () => controller.abort();
@@ -148,14 +163,11 @@ export async function generateCardChatReply({ apiKey, context, messages, signal,
         model: CARD_CHAT_MODEL,
         store: false,
         instructions: `${instructions}\nCurrent UTC time: ${now.toISOString()}`,
-        tools: [{ type: "web_search" }],
+        tools,
         tool_choice: "auto",
         reasoning: { effort: "medium" },
         max_output_tokens: 6000,
-        input: [
-          { role: "user", content: `Current saved card context (JSON data):\n${JSON.stringify(context)}` },
-          ...messages.map((message) => ({ role: message.role, content: message.text })),
-        ],
+        input,
       }),
     });
     if (!response.ok) {
@@ -163,7 +175,7 @@ export async function generateCardChatReply({ apiKey, context, messages, signal,
       if ([401, 403, 404].includes(response.status)) throw new CardChatError("Chat is unavailable. Check the server's OpenAI API key and access to GPT-6 Sol.", 503);
       throw new CardChatError("Could not reach the chat service. Please try again.");
     }
-    return parseCardChatResponse(await response.json() as ApiResponse);
+    return await response.json() as ApiResponse;
   } catch (error) {
     if (error instanceof CardChatError) throw error;
     throw new CardChatError(controller.signal.aborted ? "The response took too long or was interrupted. Please try again." : "Could not reach the chat service. Please try again.", controller.signal.aborted ? 504 : 502);

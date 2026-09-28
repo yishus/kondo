@@ -14,16 +14,17 @@ function PlaceAttributions({ place }: { place: PlaceSearchResult }) {
   ));
 }
 
-export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled, optional = false }: {
+export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled, optional = false, initialQuery = "" }: {
   tripId: string;
   label: string;
   value: { name: string; query: string; placeId?: string | null } | null;
   onChange: (place: PlaceSearchResult | null, query: string) => void;
   disabled: boolean;
   optional?: boolean;
+  initialQuery?: string;
 }) {
   const id = useId();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<PlaceSearchResult[] | null>(null);
   const [selected, setSelected] = useState<PlaceSearchResult | null>(null);
   const [searching, setSearching] = useState(false);

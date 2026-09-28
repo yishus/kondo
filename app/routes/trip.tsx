@@ -8,7 +8,7 @@ import type { Route } from "./+types/trip";
 import { requireTripOwner } from "../auth.server";
 import { getDb } from "../db.server";
 import { getTripPage } from "../trip-page.server";
-import { streamTripPhotos } from "../trip-photos.server";
+import { photoForCardLocation } from "../place-photo.server";
 import { cards, cityCardLocations, tripDays, trips } from "../db/schema";
 import { cardTypes, locationCategories, transportModes, readCardDetails, type CardType } from "../card-types";
 import { readCardLocation, type CardLocation } from "../card-location";
@@ -18,6 +18,7 @@ import { CityLocationsMap } from "../components/city-locations-map";
 import { CardLocationPicker } from "../components/card-location";
 import { CardSearch } from "../components/card-search";
 import { CardChat } from "../components/card-chat";
+import { TripChat } from "../components/trip-chat";
 import { TransportLocationPicker } from "../components/transport-location-picker";
 import { TransportRouteMap } from "../components/transport-route-map";
 import { isMappableTransportMode } from "../transport-route";
@@ -85,7 +86,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const mapsEnv = env as typeof env & { GOOGLE_MAPS_BROWSER_API_KEY?: string; GOOGLE_MAPS_API_KEY?: string };
   return {
     trip,
-    tripColumns: streamTripPhotos(tripColumns, mapsEnv.GOOGLE_MAPS_API_KEY, request.signal),
+    tripColumns,
     confirmedStays,
     googleMapsBrowserApiKey: mapsEnv.GOOGLE_MAPS_BROWSER_API_KEY?.trim() ?? "",
   };
@@ -267,9 +268,11 @@ export async function action({ params, request }: Route.ActionArgs) {
       utcOffsetMinutes: formString(formData, "transportUtcOffset"), apiKey: env.GOOGLE_MAPS_API_KEY,
     });
     const cardId = uuidv7();
+    const googlePhoto = await photoForCardLocation(details.details.type, location.location.googlePlaceId, undefined, env.GOOGLE_MAPS_API_KEY, request.signal);
     return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, (coverAttachmentId) => [
       db.insert(cards).values({
         ...location.location,
+        googlePhoto,
         id: cardId,
         tripId: trip.id,
         tripDayId,
@@ -289,7 +292,7 @@ export async function action({ params, request }: Route.ActionArgs) {
         position,
       })),
     ],
-      { allowCover: details.details.type === "location", allowGpx: details.details.type === "hike" },
+      { allowCover: details.details.type === "location", allowGpx: details.details.type === "hike", previewReferer: new URL(request.url).origin },
     );
   }
 
@@ -327,10 +330,12 @@ export async function action({ params, request }: Route.ActionArgs) {
       utcOffsetMinutes: formString(formData, "transportUtcOffset"), apiKey: env.GOOGLE_MAPS_API_KEY,
     });
 
+    const googlePhoto = await photoForCardLocation(details.details.type, location.location.googlePlaceId, card, env.GOOGLE_MAPS_API_KEY, request.signal);
     return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, (coverAttachmentId) => [
       db.update(cards)
         .set({
           ...location.location,
+          googlePhoto,
           ...details.details,
           transportEstimate,
           coverAttachmentId,
@@ -351,6 +356,7 @@ export async function action({ params, request }: Route.ActionArgs) {
       allowCover: details.details.type === "location",
       currentCoverAttachmentId: card.coverAttachmentId,
       allowGpx: card.type === "hike",
+      previewReferer: new URL(request.url).origin,
     });
   }
 
@@ -703,7 +709,10 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
   return (
     <>
       <CardSearch key={trip.id} tripId={trip.id} columns={tripColumns} onOpenCard={openCard} />
-      {view === "map" ? <TripMap columns={tripColumns} apiKey={googleMapsBrowserApiKey} onOpenCard={openCard} /> : <>
+      {view === "map" ? <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_--spacing(96)]">
+        <div className="min-w-0"><TripMap columns={tripColumns} apiKey={googleMapsBrowserApiKey} onOpenCard={openCard} /></div>
+        <TripChat key={trip.id} tripId={trip.id} columns={tripColumns} onOpenCard={openCard} />
+      </div> : <>
       <div className="board-toolbar">
       <p>{tripColumns.filter((column) => column.date !== null).length} days · {tripColumns.reduce((count, column) => count + column.cards.length, 0)} cards</p>
       <addDayFetcher.Form

@@ -185,6 +185,7 @@ export const cards = sqliteTable(
     googlePlaceId: text("google_place_id"),
     googleMapsQuery: text("google_maps_query"),
     googlePlaceName: text("google_place_name"),
+    googlePhoto: text("google_photo", { mode: "json" }).$type<{ imageUrl: string; googleMapsUri: string }>(),
     // The original location_category column had a fixed database constraint.
     // Store evolving subcategories here so adding choices does not require a
     // destructive cards-table rebuild.
@@ -260,6 +261,21 @@ export const cardChats = sqliteTable("card_chats", {
   primaryKey({ columns: [table.cardId, table.userId] }),
   index("card_chats_user_idx").on(table.userId),
 ]);
+
+export const tripChats = sqliteTable("trip_chats", {
+  tripId: text("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  messages: text("messages", { mode: "json" }).$type<import("../trip-chat").TripChatMessage[]>().notNull().default([]),
+  lockId: text("lock_id"),
+  lockedUntil: integer("locked_until").notNull().default(0),
+}, (table) => [primaryKey({ columns: [table.tripId, table.userId] }), index("trip_chats_user_idx").on(table.userId)]);
+
+// Migration triggers invalidate this snapshot on every source-table mutation.
+export const tripChatContexts = sqliteTable("trip_chat_contexts", {
+  tripId: text("trip_id").primaryKey().references(() => trips.id, { onDelete: "cascade" }),
+  revision: integer("revision").notNull().default(0),
+  context: text("context", { mode: "json" }).$type<Record<string, unknown>>(),
+});
 
 export const cityCardLocations = sqliteTable("city_card_locations", {
   id: text("id").primaryKey(),

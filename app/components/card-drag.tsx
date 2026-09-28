@@ -11,9 +11,8 @@ import { cardTypes, locationCategories, transportModes } from "../card-types";
 import { CardCover } from "./card-cover";
 import { Icon } from "./icon";
 import { TransportEstimateSummary } from "./transport-estimate-summary";
-import { HikeMap } from "./hike-map";
+import { HikePreview } from "./hike-preview";
 import { GPX_CONTENT_TYPE, hikeSummary } from "../hike-gpx";
-import { attachmentUrl } from "../attachments";
 
 // Pointer drops must actually be inside a target. Keyboard movement snaps to
 // measured targets, including empty days.
@@ -175,7 +174,7 @@ export function DraggableCard({ card, disabled, onOpen }: {
           <div className="mb-2 pr-3"><TransportEstimateSummary estimate={card.transportEstimate} /></div>
         )}
         {card.type === "hike" && <>
-          {gpx && <div className="mb-2 mr-3"><HikeMap compact url={attachmentUrl(card.tripId, card.id, gpx.id)} /></div>}
+          {gpx && <div className="mb-2 mr-3"><HikePreview key={gpx.id} tripId={card.tripId} cardId={card.id} attachmentId={gpx.id} title={card.title} onOpen={onOpen} /></div>}
           {(card.hikeDistanceKm !== null || card.hikeElevationGainM !== null) && (
             <span className="mb-2 text-xs text-muted-foreground">{hikeSummary(card.hikeDistanceKm, card.hikeElevationGainM)}</span>
           )}

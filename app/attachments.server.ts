@@ -7,8 +7,10 @@ import { attachmentFileError, isImageAttachment, MAX_ATTACHMENTS } from "./attac
 import type { Database } from "./db.server";
 import { cardAttachments, cards } from "./db/schema";
 import { GPX_CONTENT_TYPE, gpxFileError, parseGpx, type HikeTrack } from "./hike-gpx";
+import { attachmentKey, attachmentStorageKeys, hikePreviewKey } from "./attachment-storage";
+import { saveHikePreview } from "./hike-preview.server";
 
-export const attachmentKey = (cardId: string, id: string) => `cards/${cardId}/${id}`;
+export { attachmentKey } from "./attachment-storage";
 
 export async function saveCardWithAttachments(
   db: Database,
@@ -16,7 +18,7 @@ export async function saveCardWithAttachments(
   cardId: string,
   form: FormData,
   mutation: (coverAttachmentId: string | null) => BatchItem<"sqlite"> | BatchItem<"sqlite">[],
-  options: { allowCover: boolean; currentCoverAttachmentId?: string | null; allowGpx?: boolean },
+  options: { allowCover: boolean; currentCoverAttachmentId?: string | null; allowGpx?: boolean; previewReferer?: string },
 ) {
   const fail = (error: string, status = 400) => data({ ok: false as const, error }, { status });
   const fields = form.getAll("attachments");
@@ -112,6 +114,13 @@ export async function saveCardWithAttachments(
       const key = attachmentKey(cardId, upload.id);
       uploadedKeys.push(key);
       await bucket.put(key, upload.file.stream(), { httpMetadata: { contentType: upload.contentType } });
+      if (upload.contentType === GPX_CONTENT_TYPE && track && options.previewReferer) {
+        uploadedKeys.push(hikePreviewKey(cardId, upload.id));
+        // A temporary tile outage must not prevent saving the hike. A missing
+        // preview is retried when a user first views its thumbnail.
+        await saveHikePreview(bucket, cardId, upload.id, track, options.previewReferer)
+          .catch(() => console.error("Could not generate hike preview; it will be retried on display"));
+      }
     }
     // Card edits and attachment metadata commit together. Failed saves clean up
     // new blobs and keep all previously saved attachments intact.
@@ -140,7 +149,7 @@ export async function saveCardWithAttachments(
   if (removedIds.length) {
     // Metadata is already removed, so files are no longer accessible if blob
     // cleanup temporarily fails. Do not report a committed save as a failure.
-    await bucket.delete((removedIds as string[]).map((id) => attachmentKey(cardId, id)))
+    await bucket.delete((removedIds as string[]).flatMap((id) => attachmentStorageKeys(cardId, id)))
       .catch(() => console.error("Could not clean up removed attachments"));
   }
   return { ok: true as const, error: null };

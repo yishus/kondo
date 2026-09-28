@@ -13,6 +13,8 @@ import { Icon, type IconName } from "../components/icon";
 import { TimezoneOptions } from "../components/timezone-field";
 import { readTimezone } from "../timezones";
 
+export { shouldRevalidateTripChat as shouldRevalidate } from "../trip-chat";
+
 export async function action({ params, request }: Route.ActionArgs) {
   const db = getDb(env.DB);
   await requireTripOwner(request, db, params.tripId);

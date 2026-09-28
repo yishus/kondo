@@ -3,6 +3,20 @@ export type PlacePhotoResponse = {
   error: string | null;
 };
 
+// Resolve a newly selected location once. Ordinary edits reuse its saved photo,
+// including when an uploaded cover temporarily hides it.
+export async function photoForCardLocation(
+  type: string,
+  placeId: string | null,
+  current: { type: string; googlePlaceId: string | null; googlePhoto: PlacePhotoResponse["photo"] } | undefined,
+  apiKey: string | undefined,
+  signal?: AbortSignal,
+): Promise<PlacePhotoResponse["photo"]> {
+  if (type !== "location" || !placeId) return null;
+  if (current?.type === type && current.googlePlaceId === placeId) return current.googlePhoto;
+  return (await getPlacePhoto(placeId, apiKey, signal)).body.photo;
+}
+
 function isHttpsUrl(value: unknown): value is string {
   if (typeof value !== "string") return false;
   try {

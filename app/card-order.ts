@@ -1,6 +1,5 @@
 import type { CardAttachment, Card, CityCardLocation } from "./db/schema";
 import type { CardLocation } from "./card-location";
-import type { PlacePhotoResponse } from "./place-photo.server";
 import { estimateForDate } from "./transport-estimate";
 
 // UI/drop-target ID only; unscheduled cards have a null trip_day_id in storage.
@@ -13,7 +12,7 @@ export type TripCard = CardLocation & Pick<Card, "tripId" | "type" | "locationCa
   description: string;
   attachments: CardAttachment[];
   cityLocations: CityCardLocation[];
-  googlePhoto?: Promise<PlacePhotoResponse["photo"]>;
+  googlePhoto?: Card["googlePhoto"];
 };
 
 export type TripColumn = {

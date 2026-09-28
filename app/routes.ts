@@ -17,7 +17,9 @@ export default [
   route("trips/:tripId/accommodations/:accommodationId/documents/:documentId", "routes/accommodation-document.ts"),
   route("trips/:tripId/places", "routes/place-search.ts"),
   route("trips/:tripId/card-search", "routes/card-search.ts"),
+  route("trips/:tripId/chat", "routes/trip-chat.ts"),
   route("trips/:tripId/cards/:cardId/chat", "routes/card-chat.ts"),
   route("trips/:tripId/cards/:cardId/place-photo", "routes/place-photo.ts"),
   route("trips/:tripId/cards/:cardId/attachments/:attachmentId", "routes/attachment.ts"),
+  route("trips/:tripId/cards/:cardId/attachments/:attachmentId/preview-v1.svg", "routes/hike-preview.ts"),
 ] satisfies RouteConfig;

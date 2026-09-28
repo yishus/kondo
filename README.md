@@ -153,6 +153,37 @@ Run the focused mocked-API checks with `bun test tests/card-chat.test.ts`.
 After a build, run the isolated browser checks with
 `bunx playwright test tests/browser/card-chat.e2e.ts`. These do not call OpenAI.
 
+### Trip chat on the map
+
+The Map tab has an **Ask about this trip** panel using the same server-side
+`OPENAI_API_KEY` and model as card chat. Apply `0018_trip_chats.sql` before running
+this version. Each owner gets a private saved conversation for the whole trip.
+
+Ask for places, food stops, hikes, or transport ideas. Sol returns proposed cards
+using [structured function calls](https://developers.openai.com/api/docs/guides/function-calling).
+Choose an existing day or Unscheduled, optionally search for and select the exact
+map location, then select **Add to trip**. Suggestions do not change the itinerary
+until added. The map and itinerary refresh after insertion; **Open card** opens the
+normal editor. Adding a suggestion is atomic and safe to retry. New chat clears
+the conversation without deleting cards already added.
+
+Trip context includes scheduled and unscheduled cards, city places, day/time-zone
+details, accommodation candidates and confirmed options, notes, and todos.
+Descriptions and notes are bounded; attachment contents and account details are
+excluded. D1 caches this compact snapshot per trip. Database triggers invalidate
+it when any source record is inserted, updated, moved, or deleted, including edits
+by another owner. Revision checks prevent a concurrent edit from publishing a
+stale snapshot. Every request still checks ownership; private chat histories are
+never part of the shared snapshot. Ordinary messages and clearing chat do not
+reload the map, photos, or parent trip data. No AI or place-search requests run
+until the user asks or searches. The ten-message-per-minute limit is shared with
+card chat.
+
+Run `bun test tests/trip-chat.test.ts` for mocked provider, real SQLite migration,
+cache invalidation, authorization, and atomic insertion checks. After building,
+run `bunx playwright test tests/browser/trip-chat.e2e.ts` for isolated browser
+checks, including location selection, refresh behavior, retries, and mobile sizing.
+
 ### Authentication and trip owners
 
 Kondo uses Better Auth email/password accounts. Copy `.dev.vars.example` to
@@ -242,10 +273,14 @@ City/area cards can store multiple selected places. Each place has a free-form
 type, with Restaurants, Coffee, and Interest offered as suggestions. Their map
 uses type-colored Advanced Markers and fetches coordinates from the saved Place
 IDs in the browser rather than storing Google coordinates.
-Location cards without an uploaded cover request the first available Places
-photo only as the card approaches the viewport. Photo references and
-short-lived URLs are neither stored nor cached; the card links directly to the
-source photo on Google Maps for attribution. Links use Google's
+Location cards save the first available Places photo's media URL and source
+attribution URL when their selected location is saved or changed (migration
+`0019_card_google_photos.sql`). Page loads reuse those URLs without a Google photo
+lookup. When no uploaded cover is selected, a failed image triggers one refresh
+attempt and saves the replacement URL. Older cards without a saved photo resolve
+one when their cover approaches the viewport. Uploaded covers suppress these
+fallback lookups. Photo resource names are not stored. The card links directly
+to the source photo on Google Maps for attribution. Links use Google's
 [Maps URL format](https://developers.google.com/maps/documentation/urls/get-started).
 Without a key, cards and existing Maps links still work, while search shows an
 unavailable message and Google photo covers remain empty. Location fields are
@@ -293,16 +328,31 @@ Places photo fallback.
 PNG support requires migration `0010_png_card_attachments.sql`.
 Hike cards require migration `0011_hike_cards.sql`, which converts existing Hike
 locations while preserving their measurements and attachments. Hikes accept one
-GPX file (up to 10 MB) in addition to the five regular attachments. Leaflet renders
-the route over OpenStreetMap tiles, with no Google Maps key required. To enable
+GPX file (up to 10 MB) in addition to the five regular attachments. The board uses
+lazy-loaded static previews stored in R2 beside each GPX attachment. Saving a new
+GPX generates a self-contained SVG with embedded OpenStreetMap tiles, the route,
+start/finish markers, and attribution. Existing hikes generate their preview on
+first display. Replacing or removing the GPX also removes its old preview; a tile
+outage does not prevent saving the hike and a missing preview is retried on its
+next display. No additional database migration or rendering service is needed.
+
+Opening a hike card loads its interactive Leaflet map and elevation profile.
+GPX files and previews use private browser caching for one day, vary by session
+cookie, and support ETag revalidation. Replacement uploads have new URLs. Parsed
+tracks are shared per user in memory for five minutes (up to eight tracks),
+including concurrent downloads; failed downloads are not cached. Preview tile
+downloads reuse an R2 cache, honor upstream expiry headers, and revalidate stale
+tiles. Only tiles for the preview's single viewport are fetched.
+
+Leaflet renders the route over OpenStreetMap tiles, with no Google Maps key required. To enable
 the **Thunderforest Outdoors** alternative, set `THUNDERFOREST_API_KEY` in
 `.dev.vars` and restart the dev server. For production, configure it with
 `bunx wrangler secret put THUNDERFOREST_API_KEY`. Get a key from your
 [Thunderforest dashboard](https://www.thunderforest.com/docs/apikeys/).
 This key is sent to the browser for direct tile requests. The map's top-right
 layer picker switches between OpenStreetMap (the default) and Outdoors without
-resetting the route or map position. On compact cards, open the layers icon to
-see the choices. Without a key, hikes continue to use OpenStreetMap.
+resetting the route or map position. The layer picker is available inside the
+card editor; board previews use OpenStreetMap. Without a key, hikes continue to use OpenStreetMap.
 Length is
 the sum of distances between consecutive points within each segment; elevation
 gain sums uphill changes without joining separate segments. Missing elevation
