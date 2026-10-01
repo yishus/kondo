@@ -4,8 +4,8 @@ import type { CardAttachment } from "../db/schema";
 import { gpxFileError, hikeSummary, parseGpx, type HikeTrack } from "../hike-gpx";
 import { HikeMap } from "./hike-map";
 
-export function HikeGpxEditor({ tripId, attachment, disabled, distanceKm, elevationGainM }: {
-  tripId: string; attachment?: CardAttachment; disabled: boolean;
+export function HikeGpxEditor({ tripId, title, attachment, disabled, distanceKm, elevationGainM }: {
+  tripId: string; title: string; attachment?: CardAttachment; disabled: boolean;
   distanceKm: number | null; elevationGainM: number | null;
 }) {
   const [track, setTrack] = useState<HikeTrack>();
@@ -53,6 +53,6 @@ export function HikeGpxEditor({ tripId, attachment, disabled, distanceKm, elevat
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {track && <p className="text-sm font-medium">{hikeSummary(track.hikeDistanceKm, track.hikeElevationGainM)}</p>}
     {!track && !removed && (distanceKm !== null || elevationGainM !== null) && <p className="text-sm font-medium">{hikeSummary(distanceKm, elevationGainM)}</p>}
-    {(track || (url && !removed)) && <HikeMap track={track} url={url} />}
+    {(track || (url && !removed)) && <HikeMap track={track} url={url} title={title.trim() || undefined} />}
   </fieldset>;
 }

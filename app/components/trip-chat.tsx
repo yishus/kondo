@@ -1,3 +1,4 @@
+import { ChatProgress, ChatToolActivity, useChatStream } from "./chat-progress";
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import Markdown from "react-markdown";
@@ -17,15 +18,17 @@ export function TripChat({ tripId, columns, onOpenCard }: {
   const fetcher = useFetcher<TripChatData>();
   const { load } = fetcher;
   const endpoint = `/trips/${encodeURIComponent(tripId)}/chat`;
+  const stream = useChatStream(endpoint);
   const initialized = useRef(false);
   const handled = useRef<string | undefined>(undefined);
   const [messages, setMessages] = useState<TripChatMessage[]>([]);
   const [available, setAvailable] = useState<boolean | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
+  const [requestError, setRequestError] = useState<string>();
   const [draft, setDraft] = useState("");
   const log = useRef<HTMLDivElement>(null);
-  const busy = fetcher.state !== "idle";
-  const pendingQuestion = fetcher.state === "submitting" && fetcher.formData?.get("intent") === "send" ? String(fetcher.formData.get("message") ?? "") : null;
+  const busy = fetcher.state !== "idle" || stream.busy;
+  const error = stream.error ?? requestError;
   const full = messages.length >= MAX_CHAT_MESSAGES;
 
   useEffect(() => {
@@ -36,6 +39,8 @@ export function TripChat({ tripId, columns, onOpenCard }: {
 
   useEffect(() => {
     if (!fetcher.data) return;
+    stream.reset();
+    setRequestError(fetcher.data.error);
     if (fetcher.data.messages) { setMessages(fetcher.data.messages); setLoaded(true); }
     if (fetcher.data.available !== undefined) setAvailable(fetcher.data.available);
     if (fetcher.data.completed && fetcher.data.completed !== handled.current) {
@@ -46,12 +51,16 @@ export function TripChat({ tripId, columns, onOpenCard }: {
 
   useEffect(() => {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
-  }, [messages, busy]);
+  }, [messages, busy, stream.text, stream.tools, stream.status]);
 
   function send(message: string) {
     if (busy || !available || !loaded || full || !message.trim()) return;
     setDraft(message);
-    void fetcher.submit({ intent: "send", message }, { method: "post", action: endpoint });
+    setRequestError(undefined);
+    void stream.send(message).then((data) => {
+      if (data?.messages) { setMessages(data.messages); setDraft(""); }
+      if (data?.available !== undefined) setAvailable(data.available);
+    });
   }
 
   return (
@@ -69,7 +78,7 @@ export function TripChat({ tripId, columns, onOpenCard }: {
       </div>
       <p className="card-chat-context">Plan with your whole itinerary, stays, notes, and todos. Ask for ideas, then add the cards you like.</p>
       <div className="card-chat-log" ref={log} role="log" aria-label="Conversation" aria-live="polite" aria-busy={busy}>
-        {!loaded && !fetcher.data?.error && <p className="text-muted-foreground">Loading your chat…</p>}
+        {!loaded && !error && <p className="text-muted-foreground">Loading your chat…</p>}
         {loaded && !messages.length && <div className="card-chat-empty">
           <p>Where would you like to go next?</p>
           <p className="text-muted-foreground">Find places, fill a free day, or build on what you already have planned.</p>
@@ -78,6 +87,7 @@ export function TripChat({ tripId, columns, onOpenCard }: {
         {messages.map((message) => <article className={`card-chat-message card-chat-${message.role}`} key={message.id}>
           <p className="card-chat-speaker">{message.role === "user" ? "You" : "Sol"}</p>
           {message.role === "user" ? <p className="whitespace-pre-wrap">{message.text}</p> : <>
+            <ChatToolActivity tools={message.toolCalls} />
             <div className="markdown-content">
               <Markdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url) => safeChatUrl(url) ?? ""} components={{
                 a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
@@ -95,14 +105,11 @@ export function TripChat({ tripId, columns, onOpenCard }: {
               }} />)}
           </>}
         </article>)}
-        {busy && pendingQuestion && <>
-          <article className="card-chat-message card-chat-user"><p className="card-chat-speaker">You</p><p className="whitespace-pre-wrap">{pendingQuestion}</p></article>
-          <p className="card-chat-pending" role="status">Sol is preparing a reply and may search the web…</p>
-        </>}
+        <ChatProgress stream={stream} />
       </div>
       {available === false && <p className="card-chat-notice">Chat is not configured yet. Ask the trip administrator to enable it.</p>}
-      {!busy && fetcher.data?.error && <div className="card-chat-notice" role="alert">
-        <p>{fetcher.data.error}</p>
+      {!busy && error && <div className="card-chat-notice" role="alert">
+        <p>{error}</p>
         <button type="button" className="ui-button" onClick={() => void load(endpoint)}>Reload chat</button>
       </div>}
       {full && <p className="card-chat-notice">This conversation is full. Start a new chat to continue.</p>}

@@ -46,7 +46,7 @@ export async function loadTripBoard(db: Database, tripId: string, userId: string
     const day = days.find((day) => day.id === card.tripDayId);
     const columnId = card.tripDayId ?? UNSCHEDULED_COLUMN_ID;
     const column = cardsByDay.get(columnId) ?? [];
-    column.push({ ...card, tripDayId: columnId,
+    column.push({ ...card, tripCode: trip.code ?? undefined, tripDayId: columnId,
       transportEstimate: estimateForDate(card.transportEstimate, day?.tripDate ?? null, transportTimezone(card, effectiveTimezone(trip.timezone, day?.timezone ?? null))),
     });
     cardsByDay.set(columnId, column);

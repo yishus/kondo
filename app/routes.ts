@@ -15,6 +15,7 @@ export default [
     route("owners", "routes/trip-owners.ts"),
   ]),
   route("trips/:tripId/accommodations/:accommodationId/documents/:documentId", "routes/accommodation-document.ts"),
+  route("trips/:tripId/attachments/:attachmentId", "routes/trip-attachment.ts"),
   route("trips/:tripId/places", "routes/place-search.ts"),
   route("trips/:tripId/card-search", "routes/card-search.ts"),
   route("trips/:tripId/chat", "routes/trip-chat.ts"),

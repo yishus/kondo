@@ -1,3 +1,6 @@
+import { resolveTripId } from "../trip-url.server";
+import { chatStreamResponse } from "../chat-stream.server";
+import type { ChatProgress, ChatToolCall } from "../chat-stream";
 import { env } from "cloudflare:workers";
 import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import { data } from "react-router";
@@ -20,8 +23,9 @@ const apiKey = () => (env as typeof env & { OPENAI_API_KEY?: string }).OPENAI_AP
 
 async function authorize(request: Request, tripId: string) {
   const db = getDb(env.DB);
+  tripId = await resolveTripId(db, tripId);
   const user = await requireTripOwner(request, db, tripId);
-  return { db, userId: user.id, scope: and(eq(tripChats.tripId, tripId), eq(tripChats.userId, user.id)) };
+  return { tripId, db, userId: user.id, scope: and(eq(tripChats.tripId, tripId), eq(tripChats.userId, user.id)) };
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -38,7 +42,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") return reply({ error: "Method not allowed." }, 405);
   // Paid, cookie-authenticated calls must originate from this application.
   if (request.headers.get("Origin") !== new URL(request.url).origin) return reply({ error: "Please send your message from this app." }, 403);
-  const { db, userId, scope } = await authorize(request, params.tripId);
+  const { tripId, db, userId, scope } = await authorize(request, params.tripId);
   if (Number(request.headers.get("Content-Length")) > 64_000) return reply({ error: "That message is too long." }, 413);
   let form: FormData;
   try {
@@ -70,7 +74,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const now = Date.now();
   let locked = false;
   try {
-    const [thread] = await db.insert(tripChats).values({ tripId: params.tripId, userId, lockId, lockedUntil: now + 120_000 })
+    const [thread] = await db.insert(tripChats).values({ tripId: tripId, userId, lockId, lockedUntil: now + 120_000 })
       .onConflictDoUpdate({ target: [tripChats.tripId, tripChats.userId], set: { lockId, lockedUntil: now + 120_000 }, setWhere: lte(tripChats.lockedUntil, now) }).returning();
     if (!thread) return reply({ error: "A reply is already being prepared for this trip. Please wait, then reload the chat." }, 409);
     locked = true;
@@ -87,7 +91,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       const columnId = form.get("tripDayId");
       if (typeof columnId !== "string" || !columnId) return reply({ error: "Choose a day or Unscheduled." }, 400);
       const tripDayId = columnId === UNSCHEDULED_COLUMN_ID ? null : columnId;
-      if (tripDayId && !await db.select({ id: tripDays.id }).from(tripDays).where(and(eq(tripDays.id, tripDayId), eq(tripDays.tripId, params.tripId))).get()) {
+      if (tripDayId && !await db.select({ id: tripDays.id }).from(tripDays).where(and(eq(tripDays.id, tripDayId), eq(tripDays.tripId, tripId))).get()) {
         return reply({ error: "That day no longer exists. Choose another day or Unscheduled." }, 400);
       }
       const detailsForm = new FormData();
@@ -106,8 +110,8 @@ export async function action({ request, params }: Route.ActionArgs) {
         db.insert(cards).values({
           ...d, ...location.location, googlePhoto, id: cardId, tripDayId,
           // trip_id is NOT NULL: losing the lock aborts the entire batch.
-          tripId: sql`(SELECT trip_id FROM trip_chats WHERE trip_id = ${params.tripId} AND user_id = ${userId} AND lock_id = ${lockId})`,
-          position: sql`(SELECT COALESCE(MAX(position) + 1, 0) FROM cards WHERE trip_id = ${params.tripId} AND ${tripDayId === null ? isNull(cards.tripDayId) : eq(cards.tripDayId, tripDayId)})`,
+          tripId: sql`(SELECT trip_id FROM trip_chats WHERE trip_id = ${tripId} AND user_id = ${userId} AND lock_id = ${lockId})`,
+          position: sql`(SELECT COALESCE(MAX(position) + 1, 0) FROM cards WHERE trip_id = ${tripId} AND ${tripDayId === null ? isNull(cards.tripDayId) : eq(cards.tripDayId, tripDayId)})`,
         }),
         db.update(tripChats).set({ messages }).where(and(scope, eq(tripChats.lockId, lockId))).returning({ tripId: tripChats.tripId }),
       ]);
@@ -124,13 +128,26 @@ export async function action({ request, params }: Route.ActionArgs) {
         lastRequest: windowStart,
       } }).returning();
     if (usage.count > 10) return reply({ error: "You've sent several messages quickly. Please wait a minute before trying again." }, 429);
-    const context = await loadTripChatContext(db, params.tripId);
-    const question: ChatMessage = { id: crypto.randomUUID(), role: "user", text: message, citations: [], createdAt: new Date().toISOString() };
-    const answer = await generateTripChatReply({ apiKey: key, context, messages: [...thread.messages, question], signal: request.signal });
-    const messages: TripChatMessage[] = [...thread.messages, question, { ...answer, id: crypto.randomUUID(), role: "assistant", createdAt: new Date().toISOString() }];
-    const saved = await db.update(tripChats).set({ messages }).where(and(scope, eq(tripChats.lockId, lockId))).returning({ tripId: tripChats.tripId });
-    if (!saved.length) return reply({ error: "This chat changed while the answer was being prepared. Reload the chat to continue." }, 409);
-    return reply({ messages, available: true, completed: lockId });
+    const run = async (emit?: (event: ChatProgress) => void, signal = request.signal) => {
+      const toolCalls = new Map<string, ChatToolCall>();
+      const onEvent = emit ? (event: ChatProgress) => {
+        if (event.type === "tool") toolCalls.set(event.tool.id, event.tool);
+        emit(event);
+      } : undefined;
+      const context = await loadTripChatContext(db, tripId);
+      const question: ChatMessage = { id: crypto.randomUUID(), role: "user", text: message, citations: [], createdAt: new Date().toISOString() };
+      onEvent?.({ type: "status", text: "Sol is preparing a reply…" });
+      const answer = await generateTripChatReply({ apiKey: key, context, messages: [...thread.messages, question], signal, onEvent });
+      const messages: TripChatMessage[] = [...thread.messages, question, { ...answer, ...(toolCalls.size ? { toolCalls: [...toolCalls.values()] } : {}), id: crypto.randomUUID(), role: "assistant", createdAt: new Date().toISOString() }];
+      const saved = await db.update(tripChats).set({ messages }).where(and(scope, eq(tripChats.lockId, lockId))).returning({ tripId: tripChats.tripId });
+      if (!saved.length) throw new CardChatError("This chat changed while the answer was being prepared. Reload the chat to continue.", 409);
+      return { messages, available: true, completed: lockId };
+    };
+    if (request.headers.get("Accept")?.includes("text/event-stream")) {
+      locked = false; // The response now owns releasing the lock, including errors/cancellation.
+      return chatStreamResponse(request, run, () => db.update(tripChats).set({ lockId: null, lockedUntil: 0 }).where(and(scope, eq(tripChats.lockId, lockId))));
+    }
+    return reply(await run());
   } catch (error) {
     if (error instanceof Response) throw error;
     return reply({ error: error instanceof CardChatError ? error.message : "Could not save this reply. Please reload the chat and try again." }, error instanceof CardChatError ? error.status : 500);

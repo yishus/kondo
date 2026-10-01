@@ -1,7 +1,7 @@
+import { createTrip } from "../trip-url.server";
 import { env } from "cloudflare:workers";
 import { asc, eq, max, min } from "drizzle-orm";
 import { data, Form, Link, redirect, useNavigation } from "react-router";
-import { v7 as uuidv7 } from "uuid";
 
 import type { Route } from "./+types/home";
 import { requireUser } from "../auth.server";
@@ -23,6 +23,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const tripRows = await db
     .select({
       id: trips.id,
+      code: trips.code,
       title: trips.title,
       description: trips.description,
       start: min(tripDays.tripDate),
@@ -64,16 +65,11 @@ export async function action({ request }: Route.ActionArgs) {
     );
   }
 
-  const id = uuidv7();
   const timezone = readTimezone(formData.get("timezone"));
   if (!timezone.ok) return data(timezone, { status: 400 });
   const db = getDb(env.DB);
-  await db.batch([
-    db.insert(trips).values({ id, title, timezone: timezone.timezone }),
-    db.insert(tripOwners).values({ tripId: id, userId: currentUser.id }),
-  ]);
-
-  return redirect(`/trips/${id}`);
+  const trip = await createTrip(db, { title, timezone: timezone.timezone }, currentUser.id);
+  return redirect(`/trips/${trip.code}`);
 }
 
 export function meta() {
@@ -183,7 +179,7 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
                         <Link
                           className="trip-preview group"
                           key={trip.id}
-                          to={`/trips/${trip.id}`}
+                          to={`/trips/${trip.code ?? trip.id}`}
                         >
                           <div className="trip-preview-title"><h3>
                             {trip.title}

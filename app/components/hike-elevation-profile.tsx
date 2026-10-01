@@ -1,16 +1,20 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { HikeTrack } from "../hike-gpx";
 import { hikeProfilePoints, nearestProfilePoint, type HikeProfilePoint } from "../hike-profile";
 
-export function HikeElevationProfile({ track, compact = false, onHighlight }: { track: HikeTrack; compact?: boolean; onHighlight?: (point: HikeProfilePoint | null) => void }) {
+export function HikeElevationProfile({ track, compact = false, wide = false, onHighlight }: { track: HikeTrack; compact?: boolean; wide?: boolean; onHighlight?: (point: HikeProfilePoint | null) => void }) {
   const hintId = useId();
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [labelSize, setLabelSize] = useState(10);
+  const [chartWidth, setChartWidth] = useState(800);
   const points = useMemo(() => hikeProfilePoints(track), [track]);
   const [selected, setSelected] = useState<HikeProfilePoint | null>(null);
   const active = selected && points.includes(selected) ? selected : null;
   useEffect(() => { onHighlight?.(active); }, [active, onHighlight]);
-  const height = compact ? 140 : 200;
+  const width = wide ? chartWidth : 400;
+  const height = wide ? 120 : compact ? 140 : 200;
   const left = 52;
-  const right = 388;
+  const right = width - 12;
   const top = 12;
   const bottom = height - 28;
   const profile = useMemo(() => {
@@ -45,24 +49,38 @@ export function HikeElevationProfile({ track, compact = false, onHighlight }: { 
         return { points, area: `${x(run[0].distanceKm)},${bottom} ${points} ${x(run.at(-1)!.distanceKm)},${bottom}`, single: run.length === 1 };
       }),
     };
-  }, [track, bottom]);
+  }, [track, bottom, right]);
+  const hasProfile = profile !== null;
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const resize = new ResizeObserver(([entry]) => {
+      // Keep labels readable as the panel changes width.
+      if (entry.contentRect.width > 0) {
+        if (wide) setChartWidth(entry.contentRect.width);
+        setLabelSize(wide ? 12 : 10 * 400 / entry.contentRect.width);
+      }
+    });
+    resize.observe(svg);
+    return () => resize.disconnect();
+  }, [hasProfile, wide]);
 
   return <div className="border-t border-border bg-surface px-3 pb-2 pt-3">
     <p className="text-xs font-medium">Elevation profile</p>
     <p id={hintId} className="sr-only">Hover or touch the profile to highlight that point on the route map. Use left and right arrow keys when focused.</p>
-    {profile ? <svg viewBox={`0 0 400 ${height}`} role="img"
+    {profile ? <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio={wide ? "none" : undefined} role="img"
       aria-label={`Elevation profile over ${Number(track.hikeDistanceKm.toFixed(2))} km, from ${Math.round(profile.min)} to ${Math.round(profile.max)} metres`}
       aria-describedby={hintId} tabIndex={0}
       className="mt-1 block w-full text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary"
       onPointerMove={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / rect.width * 400;
+        const x = (event.clientX - rect.left) / rect.width * width;
         if (x < left || x > right) { setSelected(null); return; }
         setSelected(nearestProfilePoint(points, (x - left) / (right - left) * track.hikeDistanceKm));
       }}
       onPointerDown={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
-        const fraction = Math.max(0, Math.min(1, ((event.clientX - rect.left) / rect.width * 400 - left) / (right - left)));
+        const fraction = Math.max(0, Math.min(1, ((event.clientX - rect.left) / rect.width * width - left) / (right - left)));
         setSelected(nearestProfilePoint(points, fraction * track.hikeDistanceKm));
       }}
       onPointerLeave={() => setSelected(null)} onBlur={() => setSelected(null)}
@@ -77,7 +95,7 @@ export function HikeElevationProfile({ track, compact = false, onHighlight }: { 
       }}>
       {profile.ticks.map((tick) => <g key={tick.value}>
         <line x1={left} x2={right} y1={tick.y} y2={tick.y} stroke="var(--border)" strokeDasharray="3 3" />
-        <text x={left - 8} y={tick.y} dy="0.35em" textAnchor="end" fill="currentColor" fontSize="10">{Math.round(tick.value)} m</text>
+        <text x={left - 8} y={tick.y} dy="0.35em" textAnchor="end" fill="currentColor" fontSize={labelSize}>{Math.round(tick.value)} m</text>
       </g>)}
       {profile.runs.map((run, index) => <g key={index}>
         <polygon points={run.area} fill="#15803d" fillOpacity="0.12" />
@@ -85,8 +103,8 @@ export function HikeElevationProfile({ track, compact = false, onHighlight }: { 
           : <polyline points={run.points} fill="none" stroke="#15803d" strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
       </g>)}
       <line x1={left} x2={right} y1={bottom} y2={bottom} stroke="var(--border)" />
-      {[0, 0.5, 1].map((fraction) => <text key={fraction} x={left + fraction * (right - left)} y={height - 7}
-        textAnchor={fraction === 0 ? "start" : fraction === 1 ? "end" : "middle"} fill="currentColor" fontSize="10">
+      {(wide ? [0, 0.25, 0.5, 0.75, 1] : [0, 0.5, 1]).map((fraction) => <text key={fraction} x={left + fraction * (right - left)} y={height - 7}
+        textAnchor={fraction === 0 ? "start" : fraction === 1 ? "end" : "middle"} fill="currentColor" fontSize={labelSize}>
         {Number((track.hikeDistanceKm * fraction).toFixed(2))} km
       </text>)}
       {active && active.elevationM !== null && <g pointerEvents="none">

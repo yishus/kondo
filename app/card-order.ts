@@ -8,6 +8,7 @@ export const UNSCHEDULED_COLUMN_ID = "unscheduled";
 export type TripCard = CardLocation & Pick<Card, "tripId" | "type" | "locationCategory" | "hikeDistanceKm" | "hikeElevationGainM" | "coverAttachmentId" | "transportMode" | "startLocation" | "endLocation" | "startLocationName" | "endLocationName" | "departureTime" | "arrivalTime" | "departureTimezone" | "arrivalTimezone" | "serviceNumber" | "transportEstimate"> & {
   id: string;
   tripDayId: string;
+  tripCode?: string;
   title: string;
   description: string;
   attachments: CardAttachment[];

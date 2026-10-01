@@ -12,7 +12,7 @@ export default function TripSettings() {
   const ownerFetcher = useFetcher<typeof ownersAction>();
   if (!page) throw new Error("Trip settings require a trip.");
   const { trip, owners, currentUser } = page;
-  const base = `/trips/${encodeURIComponent(trip.id)}`;
+  const base = `/trips/${encodeURIComponent(trip.code ?? trip.id)}`;
   const ownerError = ownerFetcher.data && !ownerFetcher.data.ok ? ownerFetcher.data.error : null;
 
   return <div className="grid max-w-2xl gap-10">

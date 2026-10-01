@@ -1,5 +1,6 @@
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 export const MAX_ATTACHMENTS = 5;
+export const MAX_TRIP_FILES_PER_UPLOAD = 5;
 
 export function isImageAttachment(contentType: string): boolean {
   return contentType === "image/jpeg" || contentType === "image/png";
@@ -18,4 +19,8 @@ export function attachmentUrl(tripId: string, cardId: string, attachmentId: stri
 
 export function formatFileSize(bytes: number) {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function tripAttachmentUrl(tripId: string, attachmentId: string) {
+  return `/trips/${encodeURIComponent(tripId)}/attachments/${encodeURIComponent(attachmentId)}`;
 }

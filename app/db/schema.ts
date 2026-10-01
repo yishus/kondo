@@ -110,6 +110,7 @@ export const rateLimit = sqliteTable(
 
 export const trips = sqliteTable("trips", {
   id: text("id").primaryKey(),
+  code: text("code").unique(),
   title: text("title").notNull(),
   description: text("description").notNull().default(""),
   timezone: text("timezone"),
@@ -333,6 +334,21 @@ export const tripNotes = sqliteTable("trip_notes", {
   body: text("body").notNull().default(""),
 });
 
+export const tripAttachments = sqliteTable("trip_attachments", {
+  id: text("id").primaryKey(),
+  tripId: text("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("trip_attachments_trip_idx").on(table.tripId),
+  check("trip_attachments_type_check", sql`${table.contentType} IN ('image/jpeg', 'image/png', 'application/pdf')`),
+  check("trip_attachments_size_check", sql`${table.size} > 0 AND ${table.size} <= 10485760`),
+]);
+
+export type TripAttachment = typeof tripAttachments.$inferSelect;
+
 export const tripTodos = sqliteTable("trip_todos", {
   id: text("id").primaryKey(),
   tripId: text("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
@@ -361,6 +377,7 @@ export const tripRelations = relations(trips, ({ one, many }) => ({
   cards: many(cards),
   places: many(accommodationPlaces),
   notes: one(tripNotes),
+  attachments: many(tripAttachments),
   todos: many(tripTodos),
 }));
 export const tripOwnerRelations = relations(tripOwners, ({ one }) => ({
@@ -394,6 +411,9 @@ export const accommodationDocumentRelations = relations(accommodationDocuments, 
 }));
 export const tripNotesRelations = relations(tripNotes, ({ one }) => ({
   trip: one(trips, { fields: [tripNotes.tripId], references: [trips.id] }),
+}));
+export const tripAttachmentRelations = relations(tripAttachments, ({ one }) => ({
+  trip: one(trips, { fields: [tripAttachments.tripId], references: [trips.id] }),
 }));
 export const tripTodoRelations = relations(tripTodos, ({ one }) => ({
   trip: one(trips, { fields: [tripTodos.tripId], references: [trips.id] }),

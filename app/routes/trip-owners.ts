@@ -1,3 +1,4 @@
+import { resolveTripId } from "../trip-url.server";
 import { env } from "cloudflare:workers";
 import { data } from "react-router";
 
@@ -8,14 +9,15 @@ import { addTripOwner } from "../trip-owners.server";
 
 export async function action({ params, request }: Route.ActionArgs) {
   const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
+  const tripId = await resolveTripId(db, params.tripId);
+  await requireTripOwner(request, db, tripId);
   const form = await request.formData();
   const email = form.get("email");
 
   try {
     const result = await addTripOwner(
       db,
-      params.tripId,
+      tripId,
       typeof email === "string" ? email : "",
     );
     return result.ok

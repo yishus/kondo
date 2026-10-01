@@ -1,3 +1,4 @@
+import { resolveTripId } from "../trip-url.server";
 import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import type { Route } from "./+types/accommodation-document";
@@ -8,11 +9,12 @@ import { documentKey } from "../accommodations.server";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
+  const tripId = await resolveTripId(db, params.tripId);
+  await requireTripOwner(request, db, tripId);
   const [row] = await db.select({ document: accommodationDocuments }).from(accommodationDocuments)
     .innerJoin(accommodations, eq(accommodations.id, accommodationDocuments.accommodationId))
     .innerJoin(accommodationPlaces, eq(accommodationPlaces.id, accommodations.placeId))
-    .where(and(eq(accommodationPlaces.tripId, params.tripId), eq(accommodations.id, params.accommodationId), eq(accommodationDocuments.id, params.documentId))).limit(1);
+    .where(and(eq(accommodationPlaces.tripId, tripId), eq(accommodations.id, params.accommodationId), eq(accommodationDocuments.id, params.documentId))).limit(1);
   if (!row) throw new Response("Document not found", { status: 404 });
   const file = row.document;
   const object = await env.ATTACHMENTS.get(documentKey(file.accommodationId, file.id));

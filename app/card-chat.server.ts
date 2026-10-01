@@ -1,3 +1,4 @@
+import { readEventStream, type ChatProgress, type ChatToolCall } from "./chat-stream";
 import { and, asc, eq } from "drizzle-orm";
 import type { Database } from "./db.server";
 import { cards, tripDays, trips, type Card, type TripDay } from "./db/schema";
@@ -100,6 +101,9 @@ export type ApiResponse = {
   status?: string;
   output?: {
     type: string;
+    id?: string;
+    status?: string;
+    action?: { type?: string; queries?: string[]; query?: string; url?: string };
     name?: string;
     arguments?: string;
     content?: {
@@ -133,10 +137,10 @@ export function parseCardChatResponse(response: ApiResponse): Pick<ChatMessage, 
   return { text, citations };
 }
 
-export async function generateCardChatReply({ apiKey, context, messages, signal, fetcher = fetch, now = new Date() }: {
-  apiKey: string; context: unknown; messages: ChatMessage[]; signal?: AbortSignal; fetcher?: typeof fetch; now?: Date;
+export async function generateCardChatReply({ apiKey, context, messages, signal, onEvent, fetcher = fetch, now = new Date() }: {
+  apiKey: string; context: unknown; messages: ChatMessage[]; signal?: AbortSignal; onEvent?: (event: ChatProgress) => void; fetcher?: typeof fetch; now?: Date;
 }) {
-  return parseCardChatResponse(await requestChatResponse({ apiKey, signal, fetcher, now, instructions,
+  return parseCardChatResponse(await requestChatResponse({ apiKey, signal, onEvent, fetcher, now, instructions,
     tools: [{ type: "web_search" }],
     input: [
       { role: "user", content: `Current saved card context (JSON data):\n${JSON.stringify(context)}` },
@@ -145,8 +149,8 @@ export async function generateCardChatReply({ apiKey, context, messages, signal,
   }));
 }
 
-export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now = new Date(), instructions, tools, input }: {
-  apiKey: string; signal?: AbortSignal; fetcher?: typeof fetch; now?: Date;
+export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now = new Date(), onEvent, instructions, tools, input }: {
+  apiKey: string; signal?: AbortSignal; onEvent?: (event: ChatProgress) => void; fetcher?: typeof fetch; now?: Date;
   instructions: string; tools: unknown[]; input: { role: string; content: string }[];
 }): Promise<ApiResponse> {
   const controller = new AbortController();
@@ -162,6 +166,7 @@ export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now
       body: JSON.stringify({
         model: CARD_CHAT_MODEL,
         store: false,
+        stream: Boolean(onEvent),
         instructions: `${instructions}\nCurrent UTC time: ${now.toISOString()}`,
         tools,
         tool_choice: "auto",
@@ -175,7 +180,38 @@ export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now
       if ([401, 403, 404].includes(response.status)) throw new CardChatError("Chat is unavailable. Check the server's OpenAI API key and access to GPT-6 Sol.", 503);
       throw new CardChatError("Could not reach the chat service. Please try again.");
     }
-    return await response.json() as ApiResponse;
+    if (!onEvent) return await response.json() as ApiResponse;
+    if (!response.body) throw new CardChatError("The reply was interrupted. Please try again.");
+    let textPart = "";
+    const toolCalls = new Map<string, ChatToolCall>();
+    for await (const raw of readEventStream(response.body)) {
+      const event = raw as { type: string; delta?: string; item_id?: string; content_index?: number; item?: NonNullable<ApiResponse["output"]>[number]; response?: ApiResponse };
+      if (event.type === "response.output_text.delta" || event.type === "response.refusal.delta") {
+        const part = `${event.item_id}:${event.content_index}`;
+        if (textPart && textPart !== part) onEvent({ type: "text", delta: "\n\n" });
+        textPart = part;
+        onEvent({ type: "text", delta: event.delta ?? "" });
+      }
+      if (event.type === "response.output_item.added" || event.type === "response.output_item.done") {
+        const item = event.item;
+        if (item?.id && (item.type === "web_search_call" || item.type === "function_call")) {
+          const action = item.action;
+          const tool: ChatToolCall = { id: item.id, name: item.type === "web_search_call" ? "Web search" : item.name === "suggest_cards" ? "Suggest cards" : "Tool call",
+            status: event.type.endsWith(".done") ? "completed" : "running",
+            detail: (action?.queries?.join(" · ") || action?.query || action?.url)?.slice(0, 500) };
+          toolCalls.set(tool.id, tool);
+          onEvent({ type: "tool", tool });
+        }
+      }
+      if (event.type.startsWith("response.web_search_call.") && event.item_id) {
+        const tool: ChatToolCall = { ...toolCalls.get(event.item_id), id: event.item_id, name: "Web search", status: event.type.endsWith(".completed") ? "completed" : "running" };
+        toolCalls.set(tool.id, tool);
+        onEvent({ type: "tool", tool });
+      }
+      if (event.type === "response.completed" && event.response) return event.response;
+      if (["error", "response.failed", "response.incomplete"].includes(event.type)) throw new CardChatError("The answer could not be completed. Please try again.");
+    }
+    throw new CardChatError("The reply was interrupted. Please try again.");
   } catch (error) {
     if (error instanceof CardChatError) throw error;
     throw new CardChatError(controller.signal.aborted ? "The response took too long or was interrupted. Please try again." : "Could not reach the chat service. Please try again.", controller.signal.aborted ? 504 : 502);

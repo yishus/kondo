@@ -1,3 +1,4 @@
+import { resolveTripId } from "../trip-url.server";
 import { env } from "cloudflare:workers";
 import { useEffect, useRef, useState } from "react";
 import { data, useFetcher, useSearchParams } from "react-router";
@@ -14,13 +15,14 @@ import { formatFileSize } from "../attachments";
 import { Icon } from "../components/icon";
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
-  const { places } = await getAccommodationsPage(context, request, params.tripId);
-  return { places, tripId: params.tripId };
+  const { places, trip } = await getAccommodationsPage(context, request, params.tripId);
+  return { places, tripId: trip.code ?? trip.id };
 }
 export async function action({ params, request }: Route.ActionArgs) {
   const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
-  try { return await accommodationAction(db, env.ATTACHMENTS, params.tripId, request); }
+  const tripId = await resolveTripId(db, params.tripId);
+  await requireTripOwner(request, db, tripId);
+  try { return await accommodationAction(db, env.ATTACHMENTS, tripId, request); }
   catch { return data({ ok: false as const, error: "Could not save your changes. Please try again." }, { status: 500 }); }
 }
 export function meta() { return [{ title: "Accommodations · Kondo" }]; }

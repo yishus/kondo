@@ -1,3 +1,4 @@
+import { resolveTripId } from "./trip-url.server";
 import { env } from "cloudflare:workers";
 import { createContext, type RouterContextProvider } from "react-router";
 
@@ -15,12 +16,15 @@ const notesPageContext = createContext<Map<string, ReturnType<typeof loadNotesPa
 
 async function loadPage(request: Request, tripId: string) {
   const currentUser = await requireUser(request);
-  return { ...await loadTripBoard(getDb(env.DB), tripId, currentUser.id), currentUser };
+  const db = getDb(env.DB);
+  tripId = await resolveTripId(db, tripId);
+  return { ...await loadTripBoard(db, tripId, currentUser.id), currentUser };
 }
 
 async function loadAccommodationsPage(request: Request, tripId: string) {
   const currentUser = await requireUser(request);
   const db = getDb(env.DB);
+  tripId = await resolveTripId(db, tripId);
   const row = await db.query.trips.findFirst({
     where: (trip) => and(eq(trip.id, tripId), exists(
       db.select({ tripId: tripOwners.tripId }).from(tripOwners)
@@ -60,6 +64,7 @@ async function loadAccommodationsPage(request: Request, tripId: string) {
 async function loadNotesPage(request: Request, tripId: string) {
   const currentUser = await requireUser(request);
   const db = getDb(env.DB);
+  tripId = await resolveTripId(db, tripId);
   const row = await db.query.trips.findFirst({
     where: (trip) => and(eq(trip.id, tripId), exists(
       db.select({ tripId: tripOwners.tripId }).from(tripOwners)
@@ -69,18 +74,20 @@ async function loadNotesPage(request: Request, tripId: string) {
       owners: { columns: {}, with: { user: { columns: { id: true, name: true, email: true } } } },
       days: { columns: { tripDate: true }, orderBy: (day) => asc(day.tripDate) },
       notes: true,
+      attachments: { orderBy: (attachment) => [asc(attachment.createdAt), asc(attachment.id)] },
       todos: { orderBy: (todo) => asc(todo.id) },
     },
   });
   if (!row) throw new Response("Trip not found", { status: 404 });
-  const { owners, days, notes, todos, ...trip } = row;
+  const { owners, days, notes, todos, attachments, ...trip } = row;
   return {
     trip,
     currentUser,
     dates: { start: days[0]?.tripDate ?? null, end: days.at(-1)?.tripDate ?? null },
     owners: owners.map(({ user }) => user).sort((a, b) => a.name.localeCompare(b.name) || a.email.localeCompare(b.email)),
-    tripId: trip.id,
+    tripId: trip.code ?? trip.id,
     notes: notes?.body ?? "",
+    attachments,
     todos,
   };
 }

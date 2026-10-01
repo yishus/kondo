@@ -114,7 +114,8 @@
   .trip-tab:hover, .trip-tab.active { background: var(--muted); color: var(--foreground); }
   .board-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
   .board-toolbar > p { color: var(--muted-foreground); font-size: 12px; }
-  .planning-board { display: grid; grid-auto-flow: column; align-items: start; gap: 28px; overflow-x: auto; padding: 2px 2px 20px; }
+  /* Keep absolutely positioned screen-reader labels inside the board's scroll area. */
+  .planning-board { position: relative; display: grid; grid-auto-flow: column; align-items: start; gap: 28px; overflow-x: auto; padding: 2px 2px 20px; }
   .board-column { min-width: 0; }
   .board-column-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; padding: 0 6px 8px; border-bottom: 1px solid var(--border); }
   .board-column-header > svg { display: none; }

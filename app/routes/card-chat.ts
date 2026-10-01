@@ -1,3 +1,6 @@
+import { resolveTripId } from "../trip-url.server";
+import { chatStreamResponse } from "../chat-stream.server";
+import type { ChatProgress, ChatToolCall } from "../chat-stream";
 import { env } from "cloudflare:workers";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { data } from "react-router";
@@ -14,10 +17,11 @@ const apiKey = () => (env as typeof env & { OPENAI_API_KEY?: string }).OPENAI_AP
 
 async function authorize(request: Request, tripId: string, cardId: string) {
   const db = getDb(env.DB);
+  tripId = await resolveTripId(db, tripId);
   const user = await requireTripOwner(request, db, tripId);
   const card = await db.select({ id: cards.id }).from(cards).where(and(eq(cards.id, cardId), eq(cards.tripId, tripId))).get();
   if (!card) throw new Response("Card not found", { status: 404 });
-  return { db, userId: user.id, scope: and(eq(cardChats.cardId, cardId), eq(cardChats.userId, user.id)) };
+  return { tripId, db, userId: user.id, scope: and(eq(cardChats.cardId, cardId), eq(cardChats.userId, user.id)) };
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -34,7 +38,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") return reply({ error: "Method not allowed." }, 405);
   // Paid, cookie-authenticated calls must originate from this application.
   if (request.headers.get("Origin") !== new URL(request.url).origin) return reply({ error: "Please send your message from this app." }, 403);
-  const { db, userId, scope } = await authorize(request, params.tripId, params.cardId);
+  const { tripId, db, userId, scope } = await authorize(request, params.tripId, params.cardId);
   if (Number(request.headers.get("Content-Length")) > 64_000) return reply({ error: "That message is too long." }, 413);
   let form: FormData;
   try {
@@ -84,13 +88,26 @@ export async function action({ request, params }: Route.ActionArgs) {
         lastRequest: windowStart,
       } }).returning();
     if (usage.count > 10) return reply({ error: "You've sent several messages quickly. Please wait a minute before trying again." }, 429);
-    const context = await loadCardChatContext(db, env.ATTACHMENTS, params.tripId, params.cardId);
-    const question: ChatMessage = { id: crypto.randomUUID(), role: "user", text: message, citations: [], createdAt: new Date().toISOString() };
-    const answer = await generateCardChatReply({ apiKey: key, context, messages: [...thread.messages, question], signal: request.signal });
-    const messages: ChatMessage[] = [...thread.messages, question, { ...answer, id: crypto.randomUUID(), role: "assistant", createdAt: new Date().toISOString() }];
-    const saved = await db.update(cardChats).set({ messages }).where(and(scope, eq(cardChats.lockId, lockId))).returning({ cardId: cardChats.cardId });
-    if (!saved.length) return reply({ error: "This chat changed while the answer was being prepared. Reload the chat to continue." }, 409);
-    return reply({ messages, available: true, completed: lockId });
+    const run = async (emit?: (event: ChatProgress) => void, signal = request.signal) => {
+      const toolCalls = new Map<string, ChatToolCall>();
+      const onEvent = emit ? (event: ChatProgress) => {
+        if (event.type === "tool") toolCalls.set(event.tool.id, event.tool);
+        emit(event);
+      } : undefined;
+      const context = await loadCardChatContext(db, env.ATTACHMENTS, tripId, params.cardId);
+      const question: ChatMessage = { id: crypto.randomUUID(), role: "user", text: message, citations: [], createdAt: new Date().toISOString() };
+      onEvent?.({ type: "status", text: "Sol is preparing a reply…" });
+      const answer = await generateCardChatReply({ apiKey: key, context, messages: [...thread.messages, question], signal, onEvent });
+      const messages: ChatMessage[] = [...thread.messages, question, { ...answer, ...(toolCalls.size ? { toolCalls: [...toolCalls.values()] } : {}), id: crypto.randomUUID(), role: "assistant", createdAt: new Date().toISOString() }];
+      const saved = await db.update(cardChats).set({ messages }).where(and(scope, eq(cardChats.lockId, lockId))).returning({ cardId: cardChats.cardId });
+      if (!saved.length) throw new CardChatError("This chat changed while the answer was being prepared. Reload the chat to continue.", 409);
+      return { messages, available: true, completed: lockId };
+    };
+    if (request.headers.get("Accept")?.includes("text/event-stream")) {
+      locked = false; // The response now owns releasing the lock, including errors/cancellation.
+      return chatStreamResponse(request, run, () => db.update(cardChats).set({ lockId: null, lockedUntil: 0 }).where(and(scope, eq(cardChats.lockId, lockId))));
+    }
+    return reply(await run());
   } catch (error) {
     if (error instanceof Response) throw error;
     return reply({ error: error instanceof CardChatError ? error.message : "Could not save this reply. Please reload the chat and try again." }, error instanceof CardChatError ? error.status : 500);

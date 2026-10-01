@@ -1,3 +1,4 @@
+import { resolveTripId } from "../trip-url.server";
 import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import { useEffect, useRef, useState } from "react";
@@ -13,18 +14,21 @@ import { parseTodoMentions } from "../todo-mentions";
 import { TodoMentionInput } from "../components/todo-mention-input";
 import { TodoPerson } from "../components/todo-person";
 import { MarkdownEditor } from "../components/markdown-editor";
+import { TripFiles } from "../components/trip-files";
+import { removeTripAttachment, uploadTripAttachments } from "../trip-attachments.server";
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
-  const { tripId, notes, todos, owners } = await getNotesPage(context, request, params.tripId);
-  return { tripId, notes, todos, owners };
+  const { tripId, notes, todos, owners, attachments } = await getNotesPage(context, request, params.tripId);
+  return { tripId, notes, todos, owners, attachments };
 }
 
 export async function action({ params, request }: Route.ActionArgs) {
   const fail = (error: string, status = 400) => data({ ok: false as const, error }, { status });
   const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
+  const tripId = await resolveTripId(db, params.tripId);
+  await requireTripOwner(request, db, tripId);
   try {
-    const [trip] = await db.select({ id: trips.id }).from(trips).where(eq(trips.id, params.tripId)).limit(1);
+    const [trip] = await db.select({ id: trips.id }).from(trips).where(eq(trips.id, tripId)).limit(1);
     if (!trip) return fail("That trip no longer exists.", 404);
     const form = await request.formData();
     const get = (key: string) => typeof form.get(key) === "string" ? form.get(key) as string : "";
@@ -36,7 +40,11 @@ export async function action({ params, request }: Route.ActionArgs) {
       if (!owner) return fail("Choose an owner of this trip.");
     }
 
-    if (intent === "save-notes") {
+    if (intent === "upload-files") {
+      return await uploadTripAttachments(db, env.ATTACHMENTS, trip.id, form);
+    } else if (intent === "remove-file") {
+      return await removeTripAttachment(db, env.ATTACHMENTS, trip.id, get("attachmentId"));
+    } else if (intent === "save-notes") {
       const body = get("notes");
       if (body.length > 50000) return fail("Keep your notes under 50,000 characters.");
       await db.insert(tripNotes).values({ tripId: trip.id, body })
@@ -131,7 +139,7 @@ function NotesEditor({ notes }: { notes: string }) {
   </section>;
 }
 
-export default function Notes({ loaderData: { tripId, notes, todos, owners } }: Route.ComponentProps) {
+export default function Notes({ loaderData: { tripId, notes, todos, owners, attachments } }: Route.ComponentProps) {
   const fetcher = useFetcher<typeof action>();
   const form = useRef<HTMLFormElement>(null);
   const submitted = useRef(false);
@@ -153,6 +161,9 @@ export default function Notes({ loaderData: { tripId, notes, todos, owners } }: 
       {fetcher.data?.error && <p role="alert" className="mt-3 text-sm text-destructive">{fetcher.data.error}</p>}
       {todos.length ? <ul className="mt-5 grid">{todos.map((todo) => <TodoItem key={todo.id} todo={todo} owners={owners} />)}</ul> : <p className="empty-state mt-5">No to-dos yet. Add your first task above.</p>}
     </section>
-    <NotesEditor key={tripId} notes={notes} />
+    <div className="grid min-w-0 gap-10">
+      <NotesEditor key={tripId} notes={notes} />
+      <TripFiles key={`files:${tripId}`} tripId={tripId} attachments={attachments} />
+    </div>
   </div>;
 }

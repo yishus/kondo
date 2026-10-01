@@ -23,7 +23,7 @@ function GooglePlaceCover({ card }: { card: TripCard }) {
     try {
       // A direct resource POST keeps this recovery local to the cover, avoiding
       // a full board revalidation for each expired image.
-      const response = await fetch(`/trips/${encodeURIComponent(card.tripId)}/cards/${encodeURIComponent(card.id)}/place-photo`, {
+      const response = await fetch(`/trips/${encodeURIComponent(card.tripCode ?? card.tripId)}/cards/${encodeURIComponent(card.id)}/place-photo`, {
         method: "POST",
         body: new URLSearchParams({ placeId: card.googlePlaceId!, failedImageUrl: photo?.imageUrl ?? "" }),
         signal: request.signal,
@@ -68,19 +68,19 @@ function GooglePlaceCover({ card }: { card: TripCard }) {
 }
 
 export function CardCover({ card }: { card: TripCard }) {
-  if (card.type !== "location") return null;
+  if (card.type !== "location" && card.type !== "transport") return null;
   const uploadedCover = card.attachments.find((attachment) =>
     attachment.id === card.coverAttachmentId && isImageAttachment(attachment.contentType),
   );
   if (uploadedCover) {
-    const url = attachmentUrl(card.tripId, card.id, uploadedCover.id);
+    const url = attachmentUrl(card.tripCode ?? card.tripId, card.id, uploadedCover.id);
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-tr-[9px] bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" aria-label={`Open cover image for ${card.title}`}>
         <img src={url} alt={`${card.title} cover`} className={coverClassName()} loading="lazy" />
       </a>
     );
   }
-  return card.googlePlaceId
+  return card.type === "location" && card.googlePlaceId
     ? <GooglePlaceCover key={`${card.id}:${card.googlePlaceId}:${card.googlePhoto?.imageUrl ?? ""}`} card={card} />
     : null;
 }

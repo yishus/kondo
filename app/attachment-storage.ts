@@ -1,4 +1,5 @@
 export const attachmentKey = (cardId: string, id: string) => `cards/${cardId}/${id}`;
+export const tripAttachmentKey = (tripId: string, id: string) => `trips/${tripId}/attachments/${id}`;
 export const hikePreviewKey = (cardId: string, id: string) => `${attachmentKey(cardId, id)}/preview-v1.svg`;
 export const attachmentStorageKeys = (cardId: string, id: string) => [attachmentKey(cardId, id), hikePreviewKey(cardId, id)];
 

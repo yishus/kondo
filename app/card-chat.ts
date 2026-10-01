@@ -1,3 +1,4 @@
+import type { ChatToolCall } from "./chat-stream";
 export const MAX_CHAT_MESSAGE_LENGTH = 4000;
 export const MAX_CHAT_MESSAGES = 40;
 
@@ -7,6 +8,7 @@ export type ChatMessage = {
   role: "user" | "assistant";
   text: string;
   citations: ChatCitation[];
+  toolCalls?: ChatToolCall[];
   createdAt: string;
 };
 export type CardChatData = {

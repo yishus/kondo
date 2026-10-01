@@ -1,6 +1,9 @@
 import type { SVGProps } from "react";
 
 const paths = {
+  expand: <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" />,
+  close: <path d="m6 6 12 12M6 18 18 6" />,
+  minus: <path d="M5 12h14" />,
   compass: <><circle cx="12" cy="12" r="9" /><path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8Z" /></>,
   trips: <><rect x="3" y="7" width="18" height="14" rx="3" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M8 7v14M16 7v14" /></>,
   board: <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16M15 4v16M6 8v4M12 8v7M18 8v2" /></>,

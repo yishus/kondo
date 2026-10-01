@@ -1,3 +1,4 @@
+import type { ChatProgress } from "./chat-stream";
 import { and, asc, eq } from "drizzle-orm";
 import type { Database } from "./db.server";
 import { trips, tripChatContexts } from "./db/schema";
@@ -92,7 +93,7 @@ export function parseTripChatResponse(response: ApiResponse) {
 }
 
 export async function generateTripChatReply({ messages, context, ...options }: {
-  apiKey: string; context: unknown; messages: TripChatMessage[]; signal?: AbortSignal; fetcher?: typeof fetch;
+  apiKey: string; context: unknown; messages: TripChatMessage[]; signal?: AbortSignal; onEvent?: (event: ChatProgress) => void; fetcher?: typeof fetch;
 }) {
   return parseTripChatResponse(await requestChatResponse({ ...options, instructions, tools: [{ type: "web_search" }, suggestionTool], input: [
     { role: "user", content: `Current saved trip context (JSON data):\n${JSON.stringify(context)}` },

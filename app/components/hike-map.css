@@ -1,0 +1,55 @@
+.hike-fullscreen-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: var(--muted);
+  color: var(--foreground);
+}
+.hike-fullscreen { position: relative; isolation: isolate; width: 100%; height: 100%; }
+.hike-fullscreen-canvas { position: absolute; inset: 0; z-index: 0; }
+.hike-map-heading { position: absolute; z-index: 1; top: max(24px, env(safe-area-inset-top)); left: max(24px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 14px; max-width: calc(100% - 230px); }
+.hike-map-control { display: grid; flex-shrink: 0; width: 54px; height: 54px; place-items: center; border: 1px solid rgb(0 0 0 / 5%); border-radius: 50%; background: var(--surface); color: var(--foreground); box-shadow: 0 3px 14px rgb(0 0 0 / 14%); }
+.hike-map-control:hover, .hike-map-layer-trigger:hover { background: var(--muted); }
+.hike-map-control:disabled { opacity: .5; cursor: wait; }
+.hike-map-title { min-width: 0; padding: 10px 16px; border-radius: 14px; background: var(--surface); box-shadow: 0 3px 14px rgb(0 0 0 / 10%); }
+.hike-map-title h2 { overflow: hidden; font-size: 14px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.hike-map-tools { position: absolute; z-index: 2; top: max(24px, env(safe-area-inset-top)); right: max(24px, env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: end; gap: 12px; }
+.hike-map-layers { overflow: hidden; border-radius: 18px; background: var(--surface); box-shadow: 0 3px 14px rgb(0 0 0 / 14%); }
+.hike-map-layer-trigger { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 54px; padding: 12px 16px; font-size: 12px; font-weight: 600; }
+.hike-map-layer-options { display: flex; gap: 10px; padding: 0 14px 14px; }
+.hike-map-layer-options button { display: grid; gap: 6px; border-radius: 8px; padding: 4px; font-size: 11px; }
+.hike-map-layer-options button[aria-pressed="true"] { background: var(--muted); outline: 2px solid #4d863a; outline-offset: -2px; }
+.hike-layer-swatch { display: block; width: 54px; height: 44px; border-radius: 6px; }
+.hike-layer-outdoors { background: repeating-linear-gradient(140deg, transparent 0 13px, #ffffff80 14px 16px, transparent 17px 25px), linear-gradient(30deg, #7da86c, #d5e5b5, #a3c69e); }
+.hike-layer-street { background: repeating-linear-gradient(30deg, transparent 0 11px, white 12px 15px, transparent 16px 28px), repeating-linear-gradient(120deg, #e8e7e1 0 17px, white 18px 21px, #e8e7e1 22px 34px); }
+.hike-map-profile { position: absolute; z-index: 1; bottom: max(36px, calc(env(safe-area-inset-bottom) + 24px)); left: 50%; width: min(820px, calc(100% - 200px)); transform: translateX(-50%); overflow: hidden; border-radius: 24px; box-shadow: 0 5px 26px rgb(0 0 0 / 16%); }
+.hike-map-profile > div { border: 0; padding: 16px 24px 12px; }
+.hike-map-profile svg { height: 120px; }
+.hike-map-profile svg polygon { fill-opacity: .04; }
+.hike-map-profile svg polyline { stroke: var(--foreground); }
+.hike-map-expand { position: absolute; z-index: 1; right: 10px; display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 8px; background: var(--surface); color: var(--foreground); font-size: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 16%); }
+.hike-map-expand:hover { background: var(--muted); }
+.hike-fullscreen .leaflet-control-attribution { max-width: calc(100vw - 90px); font-size: 10px; }
+@media (max-width: 600px) {
+  .hike-map-heading { top: max(14px, env(safe-area-inset-top)); left: 14px; max-width: calc(100% - 86px); gap: 10px; }
+  .hike-map-control { width: 44px; height: 44px; }
+  .hike-map-title { padding: 7px 12px; }
+  .hike-map-title h2 { font-size: 12px; }
+  .hike-map-tools { top: max(80px, calc(env(safe-area-inset-top) + 66px)); right: 14px; gap: 10px; }
+  .hike-map-layer-trigger { min-height: 44px; padding: 10px 12px; }
+  .hike-map-profile { width: calc(100% - 28px); bottom: max(38px, calc(env(safe-area-inset-bottom) + 28px)); border-radius: 18px; }
+  .hike-map-profile > div { padding: 12px; }
+}
+@media (max-height: 520px) and (min-width: 601px) {
+  .hike-map-profile svg { height: 64px; }
+  .hike-map-profile > div { padding: 10px 16px; }
+  .hike-map-tools { gap: 6px; }
+  .hike-map-control { width: 40px; height: 40px; }
+}

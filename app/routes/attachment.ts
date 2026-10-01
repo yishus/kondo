@@ -1,3 +1,4 @@
+import { resolveTripId } from "../trip-url.server";
 import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 
@@ -11,10 +12,11 @@ import { GPX_CONTENT_TYPE } from "../hike-gpx";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
+  const tripId = await resolveTripId(db, params.tripId);
+  await requireTripOwner(request, db, tripId);
   const [row] = await db.select({ attachment: cardAttachments }).from(cardAttachments)
     .innerJoin(cards, eq(cards.id, cardAttachments.cardId))
-    .where(and(eq(cards.tripId, params.tripId), eq(cards.id, params.cardId), eq(cardAttachments.id, params.attachmentId)))
+    .where(and(eq(cards.tripId, tripId), eq(cards.id, params.cardId), eq(cardAttachments.id, params.attachmentId)))
     .limit(1);
   if (!row) throw new Response("Attachment not found", { status: 404 });
   const file = row.attachment;

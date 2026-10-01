@@ -1,3 +1,4 @@
+import { redirectLegacyTripUrl, resolveTripId } from "../trip-url.server";
 import { env } from "cloudflare:workers";
 import { eq, max, min } from "drizzle-orm";
 import { data, NavLink, Outlet } from "react-router";
@@ -17,42 +18,48 @@ export { shouldRevalidateTripChat as shouldRevalidate } from "../trip-chat";
 
 export async function action({ params, request }: Route.ActionArgs) {
   const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
+  const tripId = await resolveTripId(db, params.tripId);
+  await requireTripOwner(request, db, tripId);
   const form = await request.formData();
   if (form.get("intent") !== "update-timezone") return data({ ok: false as const, error: "Unknown action." }, { status: 400 });
   const result = readTimezone(form.get("timezone"));
   if (!result.ok) return data(result, { status: 400 });
-  await db.update(trips).set({ timezone: result.timezone }).where(eq(trips.id, params.tripId));
+  await db.update(trips).set({ timezone: result.timezone }).where(eq(trips.id, tripId));
   return { ok: true as const, error: null };
 }
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   if (isTripBoardRequest(request, params.tripId)) {
     const { trip, dates, owners, currentUser } = await getTripPage(context, request, params.tripId);
+    redirectLegacyTripUrl(request, trip);
     return { trip, dates, owners, currentUser };
   }
   if (isAccommodationsRequest(request, params.tripId)) {
     const { trip, dates, owners, currentUser } = await getAccommodationsPage(context, request, params.tripId);
+    redirectLegacyTripUrl(request, trip);
     return { trip, dates, owners, currentUser };
   }
   if (isNotesRequest(request, params.tripId)) {
     const { trip, dates, owners, currentUser } = await getNotesPage(context, request, params.tripId);
+    redirectLegacyTripUrl(request, trip);
     return { trip, dates, owners, currentUser };
   }
   const db = getDb(env.DB);
-  const currentUser = await requireTripOwner(request, db, params.tripId);
+  const tripId = await resolveTripId(db, params.tripId);
+  const currentUser = await requireTripOwner(request, db, tripId);
   const [[trip], [dates], owners] = await Promise.all([
-    db.select().from(trips).where(eq(trips.id, params.tripId)).limit(1),
+    db.select().from(trips).where(eq(trips.id, tripId)).limit(1),
     db.select({ start: min(tripDays.tripDate), end: max(tripDays.tripDate) })
-      .from(tripDays).where(eq(tripDays.tripId, params.tripId)),
-    listTripOwners(db, params.tripId),
+      .from(tripDays).where(eq(tripDays.tripId, tripId)),
+    listTripOwners(db, tripId),
   ]);
   if (!trip) throw new Response("Trip not found", { status: 404 });
+  redirectLegacyTripUrl(request, trip);
   return { trip, dates, owners, currentUser };
 }
 
 export default function TripLayout({ loaderData: { trip, dates, currentUser } }: Route.ComponentProps) {
-  const base = `/trips/${encodeURIComponent(trip.id)}`;
+  const base = `/trips/${encodeURIComponent(trip.code ?? trip.id)}`;
   const dateSubtitle = formatTripDates(dates.start, dates.end);
   return <AppShell user={currentUser} trip={trip}>
     <TimezoneOptions />

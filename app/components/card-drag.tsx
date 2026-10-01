@@ -174,7 +174,7 @@ export function DraggableCard({ card, disabled, onOpen }: {
           <div className="mb-2 pr-3"><TransportEstimateSummary estimate={card.transportEstimate} /></div>
         )}
         {card.type === "hike" && <>
-          {gpx && <div className="mb-2 mr-3"><HikePreview key={gpx.id} tripId={card.tripId} cardId={card.id} attachmentId={gpx.id} title={card.title} onOpen={onOpen} /></div>}
+          {gpx && <div className="mb-2 mr-3"><HikePreview key={gpx.id} tripId={card.tripCode ?? card.tripId} cardId={card.id} attachmentId={gpx.id} title={card.title} onOpen={onOpen} /></div>}
           {(card.hikeDistanceKm !== null || card.hikeElevationGainM !== null) && (
             <span className="mb-2 text-xs text-muted-foreground">{hikeSummary(card.hikeDistanceKm, card.hikeElevationGainM)}</span>
           )}

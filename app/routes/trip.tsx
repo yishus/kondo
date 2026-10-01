@@ -1,3 +1,4 @@
+import { resolveTripId } from "../trip-url.server";
 import { env } from "cloudflare:workers";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { useEffect, useRef, useState } from "react";
@@ -94,7 +95,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 
 export async function action({ params, request }: Route.ActionArgs) {
   const db = getDb(env.DB);
-  await requireTripOwner(request, db, params.tripId);
+  const tripId = await resolveTripId(db, params.tripId);
+  await requireTripOwner(request, db, tripId);
   if (Number(request.headers.get("Content-Length")) > 51 * 1024 * 1024) {
     return data({ ok: false as const, error: "Choose up to 5 files, 10 MB or smaller each." }, { status: 413 });
   }
@@ -103,7 +105,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   const tripRows = await db
     .select({ id: trips.id, timezone: trips.timezone })
     .from(trips)
-    .where(eq(trips.id, params.tripId))
+    .where(eq(trips.id, tripId))
     .limit(1);
   const trip = tripRows[0];
 
@@ -292,7 +294,7 @@ export async function action({ params, request }: Route.ActionArgs) {
         position,
       })),
     ],
-      { allowCover: details.details.type === "location", allowGpx: details.details.type === "hike", previewReferer: new URL(request.url).origin },
+      { allowCover: details.details.type === "location" || details.details.type === "transport", allowGpx: details.details.type === "hike", previewReferer: new URL(request.url).origin },
     );
   }
 
@@ -353,7 +355,7 @@ export async function action({ params, request }: Route.ActionArgs) {
         position,
       })),
     ], {
-      allowCover: details.details.type === "location",
+      allowCover: details.details.type === "location" || details.details.type === "transport",
       currentCoverAttachmentId: card.coverAttachmentId,
       allowGpx: card.type === "hike",
       previewReferer: new URL(request.url).origin,
@@ -708,10 +710,10 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
 
   return (
     <>
-      <CardSearch key={trip.id} tripId={trip.id} columns={tripColumns} onOpenCard={openCard} />
+      <CardSearch key={trip.id} tripId={trip.code ?? trip.id} columns={tripColumns} onOpenCard={openCard} />
       {view === "map" ? <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_--spacing(96)]">
         <div className="min-w-0"><TripMap columns={tripColumns} apiKey={googleMapsBrowserApiKey} onOpenCard={openCard} /></div>
-        <TripChat key={trip.id} tripId={trip.id} columns={tripColumns} onOpenCard={openCard} />
+        <TripChat key={trip.id} tripId={trip.code ?? trip.id} columns={tripColumns} onOpenCard={openCard} />
       </div> : <>
       <div className="board-toolbar">
       <p>{tripColumns.filter((column) => column.date !== null).length} days · {tripColumns.reduce((count, column) => count + column.cards.length, 0)} cards</p>
@@ -772,7 +774,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
         ) : (
           <DayColumn
             column={{ ...column, date: column.date }}
-            tripId={trip.id}
+            tripId={trip.code ?? trip.id}
             tripTimezone={trip.timezone}
             confirmedStays={confirmedStays}
             key={column.id}
@@ -871,7 +873,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                   </select>
                 </label>
                 {([ ["startLocation", "Start location"], ["endLocation", "End location"] ] as const).map(([field, label]) => (
-                  <TransportLocationPicker key={`${activeCardKey}:${field}`} tripId={trip.id}
+                  <TransportLocationPicker key={`${activeCardKey}:${field}`} tripId={trip.code ?? trip.id}
                     name={field} label={label} value={cardDraft[field]} placeName={cardDraft[`${field}Name`]}
                     onChange={(value, placeName) => setCardDraft((draft) => ({ ...draft, [field]: value, [`${field}Name`]: placeName }))}
                     disabled={cardFetcher.state !== "idle"}
@@ -956,7 +958,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
               )}
 
               {cardDraft.type === "hike" && (
-                <HikeGpxEditor key={`gpx:${activeCardKey}`} tripId={trip.id}
+                <HikeGpxEditor key={`gpx:${activeCardKey}`} tripId={trip.code ?? trip.id} title={cardDraft.title}
                   attachment={activeSavedCard?.attachments.find((item) => item.contentType === GPX_CONTENT_TYPE)}
                   distanceKm={activeSavedCard?.hikeDistanceKm ?? null} elevationGainM={activeSavedCard?.hikeElevationGainM ?? null}
                   disabled={cardFetcher.state !== "idle"} />
@@ -972,7 +974,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                   )}
                   <CityLocationsEditor
                     key={`city-locations:${activeCardKey}`}
-                    tripId={trip.id}
+                    tripId={trip.code ?? trip.id}
                     locations={activeSavedCard?.cityLocations ?? []}
                     disabled={cardFetcher.state !== "idle"}
                   />
@@ -1002,13 +1004,13 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                 />
               </div>
 
-              <CardAttachments key={`attachments:${activeCardKey}`} tripId={trip.id}
+              <CardAttachments key={`attachments:${activeCardKey}`} tripId={trip.code ?? trip.id}
                 attachments={activeSavedCard?.attachments.filter((item) => item.contentType !== GPX_CONTENT_TYPE) ?? []}
                 coverAttachmentId={activeCard.mode === "edit" ? tripColumns.flatMap((column) => column.cards).find((card) => card.id === activeCard.cardId)?.coverAttachmentId ?? null : null}
-                allowCover={cardDraft.type === "location"}
+                allowCover={cardDraft.type === "location" || cardDraft.type === "transport"}
                 disabled={cardFetcher.state !== "idle"} />
 
-              {(cardDraft.type === "location" || cardDraft.type === "hike") && <CardLocationPicker key={activeCardKey} tripId={trip.id} location={cardLocation} onChange={setCardLocation} disabled={cardFetcher.state !== "idle"} />}
+              {(cardDraft.type === "location" || cardDraft.type === "hike") && <CardLocationPicker key={activeCardKey} tripId={trip.code ?? trip.id} location={cardLocation} onChange={setCardLocation} disabled={cardFetcher.state !== "idle"} />}
               </>}
 
               {cardErrorFor === activeCardKey && cardFetcher.data?.error && (
@@ -1050,7 +1052,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
             </cardFetcher.Form>
             </div>
             {activeCard.mode === "edit" && activeSavedCard && <div hidden={cardPanel !== "chat"}>
-              <CardChat key={activeCard.cardId} tripId={trip.id} cardId={activeCard.cardId} type={activeSavedCard.type}
+              <CardChat key={activeCard.cardId} tripId={trip.code ?? trip.id} cardId={activeCard.cardId} type={activeSavedCard.type}
                 active={cardPanel === "chat"} date={activeCardDate} timezone={activeCardTimezone} />
             </div>}
           </section>

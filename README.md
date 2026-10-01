@@ -79,6 +79,9 @@ and arrival dates for travel across zones are not yet supported.
 
 Before deploying code that adds database fields, apply its migrations to the
 remote database with `bunx wrangler d1 migrations apply DB --remote`.
+Migration `0020_trip_attachments.sql` adds trip-level files in the **Notes** tab.
+Trip owners can upload, open, download, and remove JPG, PNG, and PDF files
+(up to five per upload, 10 MB per file).
 Migration `0014_day_estimates.sql` adds saved day timing snapshots. Click
 **Refresh times** in the three-dot menu to the left of a day's card count to estimate
 clock times between cards.
@@ -454,6 +457,18 @@ Create a production build:
 ```bash
 npm run build
 ```
+
+## Trip URLs
+
+Trip links use a stable eight-character lowercase code, for example
+`/trips/k7mp4x9w`. UUIDs remain the internal database keys. Existing page links
+redirect to the short URL, preserving the tab and query string; existing POST
+URLs remain supported. Trip ownership is still required.
+
+Apply migration `0021_trip_codes.sql` before running the updated app. It assigns
+codes to existing trips and enforces uniqueness. New trips retry code collisions.
+Run `bun test tests/trip-codes.test.ts` for migration, URL, ownership, and mutation
+checks.
 
 ## Deployment
 
