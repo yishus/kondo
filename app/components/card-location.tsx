@@ -1,10 +1,11 @@
-import type { CardLocation } from "../card-location";
+import type { CardLocation, PlaceSearchResult } from "../card-location";
 import { GoogleMapsPlacePicker } from "./google-maps-place-picker";
 
-export function CardLocationPicker({ tripId, location, onChange, disabled }: {
+export function CardLocationPicker({ tripId, location, onChange, onPlaceSelected, disabled }: {
   tripId: string;
   location: CardLocation;
   onChange: (location: CardLocation) => void;
+  onPlaceSelected?: (place: PlaceSearchResult) => void;
   disabled: boolean;
 }) {
   return <>
@@ -15,7 +16,10 @@ export function CardLocationPicker({ tripId, location, onChange, disabled }: {
       value={location.googlePlaceId ? {
         name: location.googlePlaceName || "Location added", query: location.googleMapsQuery ?? "Location", placeId: location.googlePlaceId,
       } : null}
-      onChange={(place, query) => onChange({ googlePlaceId: place?.id ?? null, googleMapsQuery: place ? query : null, googlePlaceName: place?.name ?? null })}
+      onChange={(place, query) => {
+        onChange({ googlePlaceId: place?.id ?? null, googleMapsQuery: place ? query : null, googlePlaceName: place?.name ?? null });
+        if (place) onPlaceSelected?.(place);
+      }}
     />
   </>;
 }

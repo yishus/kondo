@@ -9,12 +9,21 @@ export type PlaceSearchResult = {
   name: string;
   address: string;
   attributions: { provider: string; uri: string | null }[];
+  primaryType?: string;
+  types?: string[];
 };
 
 export type PlaceSearchResponse = {
   places: PlaceSearchResult[];
   error: string | null;
+  resolved?: boolean;
 };
+
+export function placeLocationCategory(place: PlaceSearchResult): "food" | "place_of_interest" {
+  const types = [place.primaryType ?? "", ...(place.types ?? [])];
+  return types.some((type) => ["food", "restaurant", "cafe", "bakery", "bar", "meal_takeaway", "meal_delivery"].includes(type)
+    || type.endsWith("_restaurant") || type.endsWith("_cafe")) ? "food" : "place_of_interest";
+}
 
 export function googleMapsUrl(placeId: string, query: string) {
   const params = new URLSearchParams({ api: "1", query, query_place_id: placeId });

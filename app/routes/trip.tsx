@@ -12,7 +12,7 @@ import { getTripPage } from "../trip-page.server";
 import { photoForCardLocation } from "../place-photo.server";
 import { cards, cityCardLocations, tripDays, trips } from "../db/schema";
 import { cardTypes, locationCategories, transportModes, readCardDetails, type CardType } from "../card-types";
-import { readCardLocation, type CardLocation } from "../card-location";
+import { placeLocationCategory, readCardLocation, type CardLocation } from "../card-location";
 import { readCityLocations } from "../city-locations";
 import { CityLocationsEditor } from "../components/city-locations-editor";
 import { CityLocationsMap } from "../components/city-locations-map";
@@ -664,7 +664,10 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    titleInputRef.current?.focus();
+    const placeInput = activeCard.mode === "create"
+      ? document.querySelector<HTMLInputElement>('[aria-labelledby="card-dialog-heading"] input[type="search"]')
+      : null;
+    (placeInput ?? titleInputRef.current)?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setActiveCard(null);
@@ -919,6 +922,19 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                 )}
               </>}
 
+              {(cardDraft.type === "location" || cardDraft.type === "hike") && <CardLocationPicker
+                key={activeCardKey} tripId={trip.code ?? trip.id} location={cardLocation}
+                onChange={setCardLocation} disabled={cardFetcher.state !== "idle"}
+                onPlaceSelected={(place) => {
+                  if (activeCard.mode !== "create" || cardDraft.type !== "location") return;
+                  setCardDraft((draft) => ({
+                    ...draft,
+                    title: !draft.title.trim() || draft.title === cardLocation.googlePlaceName ? place.name : draft.title,
+                    locationCategory: draft.locationCategory || placeLocationCategory(place),
+                  }));
+                }}
+              />}
+
               {cardDraft.type !== "transport" && (
               <div className="grid gap-1.5">
                 <label className="ui-label" htmlFor="card-title">
@@ -1010,7 +1026,6 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                 allowCover={cardDraft.type === "location" || cardDraft.type === "transport"}
                 disabled={cardFetcher.state !== "idle"} />
 
-              {(cardDraft.type === "location" || cardDraft.type === "hike") && <CardLocationPicker key={activeCardKey} tripId={trip.code ?? trip.id} location={cardLocation} onChange={setCardLocation} disabled={cardFetcher.state !== "idle"} />}
               </>}
 
               {cardErrorFor === activeCardKey && cardFetcher.data?.error && (

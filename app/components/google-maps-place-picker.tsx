@@ -39,8 +39,16 @@ export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled
     setError(null);
   }
 
-  async function search() {
-    const text = query.trim();
+  function choose(place: PlaceSearchResult) {
+    // Store a readable query, never the pasted URL (which can be very long).
+    onChange(place, `${place.name} ${place.address}`.trim().slice(0, 200));
+    setSelected(place);
+    clearSearch();
+    setQuery("");
+  }
+
+  async function search(input = query) {
+    const text = input.trim();
     if (text.length < 2 || disabled) return;
     clearSearch();
     const controller = new AbortController();
@@ -56,6 +64,8 @@ export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled
       if (controller.signal.aborted) return;
       if (!response.ok || result.error) {
         setError(result.error || "Could not search Google Maps. Please try again.");
+      } else if (result.resolved && result.places.length === 1) {
+        choose(result.places[0]);
       } else {
         setResults(result.places);
       }
@@ -89,13 +99,20 @@ export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled
         </div>
       )}
       <label className="ui-label" htmlFor={id}>
-        {value ? "Search for a different place" : "Search for a place"}
+        {value ? "Search or paste a different Maps link" : "Search or paste a Google Maps link"}
       </label>
       <div className="flex gap-2">
-        <input id={id} type="search" value={query} maxLength={200} autoComplete="off"
+        <input id={id} type="search" value={query} maxLength={8192} autoComplete="off"
           className="ui-input flex-1"
-          placeholder="e.g. Ghibli Museum, Tokyo" aria-describedby={`${id}-hint`}
+          placeholder="Place name or Google Maps URL" aria-describedby={`${id}-hint`}
           onChange={(event) => { clearSearch(); setQuery(event.target.value); }}
+          onPaste={(event) => {
+            const text = event.clipboardData.getData("text").trim();
+            if (!/^https?:\/\//i.test(text)) return;
+            event.preventDefault();
+            setQuery(text);
+            void search(text);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.nativeEvent.isComposing) {
               event.preventDefault();
@@ -107,7 +124,7 @@ export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled
           {searching ? "Searching…" : "Search"}
         </button>
       </div>
-      <p id={`${id}-hint`} className="text-xs text-muted-foreground">Include the city or address, then choose a result to attach it.</p>
+      <p id={`${id}-hint`} className="text-xs text-muted-foreground">Paste a place’s Share link to attach it, or search by name and choose a result.</p>
       <div role="status" className="text-xs text-muted-foreground">
         {searching ? "Searching Google Maps…" : results ? results.length ? `${results.length} places found.` : "No places found. Try a different name or include the city." : ""}
       </div>
@@ -117,12 +134,7 @@ export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled
           <ul aria-label={`${label} search results`} className="max-h-52 overflow-y-auto">
             {results.map((place) => (
               <li key={place.id} className="border-b border-border last:border-b-0">
-                <button type="button" className="ui-button block w-full text-left" onClick={() => {
-                  onChange(place, query.trim());
-                  setSelected(place);
-                  clearSearch();
-                  setQuery("");
-                }}>
+                <button type="button" className="ui-button block w-full text-left" onClick={() => choose(place)}>
                   <span className="block break-words">{place.name}</span>
                   <span className="mt-0.5 block text-xs font-normal break-words text-muted-foreground">{place.address}</span>
                 </button>
