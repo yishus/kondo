@@ -267,10 +267,17 @@ or arrival time, and interpret that time in the day or trip time zone, falling
 back to the browser's time zone when neither is set.
 
 For deployment, set the Worker secret with `bunx wrangler secret put GOOGLE_MAPS_API_KEY`.
-The key is never sent to the browser. Search runs when the user clicks Search or
-presses Enter in the location field, using Text Search (New) with five results and
-only names, addresses, IDs, and attribution. Cards store the selected place ID,
-place name, and the user's search text; transport endpoints additionally store the selected
+The key is never sent to the browser. Search runs when the user clicks Search,
+presses Enter, or pastes a Google Maps URL in the location field. Shared short
+links are expanded through validated Google Maps hosts. Links with a place ID
+use Place Details (New) and attach the exact place; other supported place links
+use Text Search (New), with a coordinate bias when available, and let the user
+choose a match. Search returns up to five results with names, addresses, IDs,
+types, and attribution. For new location cards, choosing a place fills the title
+and Food / Place of interest subcategory when those fields are empty. Descriptions
+remain manual; editorial summaries are not requested. Click Add card to save.
+Cards store the selected place ID, place name, and a readable name/address query;
+transport endpoints additionally store the selected
 short name and full address for their titles and routing.
 City/area cards can store multiple selected places. Each place has a free-form
 type, with Restaurants, Coffee, and Interest offered as suggestions. Their map
