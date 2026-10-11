@@ -386,10 +386,10 @@ function UnscheduledColumn({ column, onAddCard, onOpenCard, moving }: {
 }) {
   const destination = { tripDayId: column.id };
   return (
-    <section className="board-column" aria-label="Unscheduled cards">
-      <div className="board-column-header">
+    <section className="min-w-0" aria-label="Unscheduled cards">
+      <div className="flex items-center justify-between gap-2 min-h-9.5 p-[0_6px_8px] border-b border-b-border [&_>_svg]:hidden">
         <h2 className="flex items-center gap-2 py-1 text-[13px] font-semibold"><Icon name="compass" width="16" height="16" className="text-muted-foreground" />Unscheduled</h2>
-        <span className="count-badge bg-surface" aria-label={`${column.cards.length} cards`}>
+        <span className="inline-grid min-w-5 h-5 place-items-center p-[0_4px] text-muted-foreground text-[11px] font-normal tabular-nums bg-surface" aria-label={`${column.cards.length} cards`}>
           {column.cards.length}
         </span>
       </div>
@@ -404,7 +404,7 @@ function UnscheduledColumn({ column, onAddCard, onOpenCard, moving }: {
           {column.cards.length === 0 && (
             <p className="mb-2 rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">Drop cards here to plan them later.</p>
           )}
-          <button className="ui-button w-full justify-start text-left" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
+          <button className="inline-flex min-h-8.5 shrink-0 items-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed w-full justify-start text-left" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
             <span aria-hidden="true">＋</span> Add card
           </button>
         </CardDropSlot>
@@ -415,10 +415,10 @@ function UnscheduledColumn({ column, onAddCard, onOpenCard, moving }: {
 
 function EstimateLabel({ time, explanation }: { time: string; explanation: string }) {
   return (
-    <div className="day-time-estimate" title={explanation}>
-      <span className="day-time-estimate-line" aria-hidden="true" />
+    <div className="flex items-center gap-[0.65rem] p-[0.25rem_0.35rem_0.8rem] text-muted-foreground text-[0.7rem] tabular-nums" title={explanation}>
+      <span className="flex-1 h-px bg-border" aria-hidden="true" />
       <span aria-label={`Estimated time ${time}. ${explanation}`}>≈ {time}</span>
-      <span className="day-time-estimate-line" aria-hidden="true" />
+      <span className="flex-1 h-px bg-border" aria-hidden="true" />
     </div>
   );
 }
@@ -484,7 +484,7 @@ function DayColumn({
         >
           {firstActivityIndex === -1 && startLabel}
           <EstimateLabels labels={estimateSlots[column.cards.length]} />
-          <button className="ui-button w-full justify-start text-left" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
+          <button className="inline-flex min-h-8.5 shrink-0 items-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed w-full justify-start text-left" type="button" aria-haspopup="dialog" onClick={() => onAddCard(column.id)}>
             <span aria-hidden="true">＋</span> Add card
           </button>
         </CardDropSlot>
@@ -495,10 +495,10 @@ function DayColumn({
   return (
     <div className="grid min-w-0 gap-3">
     <section
-      className="board-column"
+      className="min-w-0"
       aria-label={`Itinerary for ${formatTripDate(column.date)}`}
     >
-      <div className="board-column-header">
+      <div className="flex items-center justify-between gap-2 min-h-9.5 p-[0_6px_8px] border-b border-b-border [&_>_svg]:hidden">
         <Icon name="calendar" width="16" height="16" className="shrink-0 text-muted-foreground" />
         <input
           className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 text-[13px] font-semibold text-foreground outline-none transition hover:bg-surface/60 focus:border-primary focus:bg-surface focus:ring-2 focus:ring-primary/20 aria-invalid:border-destructive disabled:cursor-wait"
@@ -530,7 +530,7 @@ function DayColumn({
             deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }, { method: "post" })} />
         <span
-          className="count-badge shrink-0 bg-surface"
+          className="inline-grid min-w-5 h-5 place-items-center p-[0_4px] text-muted-foreground text-[11px] font-normal tabular-nums shrink-0 bg-surface"
           aria-label={`${column.cards.length} cards`}
         >
           {column.cards.length}
@@ -550,12 +550,12 @@ function DayColumn({
       {renderCards()}
     </section>
     {confirmedStays.filter((stay) => stay.checkIn <= displayedDate && displayedDate < stay.checkOut).map((stay) => (
-      <article key={stay.id} aria-label={`Confirmed accommodation: ${stay.name}`} className="accommodation-card">
-        <p className="accommodation-kind"><Icon name="bed" width="13" height="13" />Confirmed stay</p>
-        <h3 className="mt-2 text-[13px] font-medium break-words">{stay.name}</h3>
-        <div className="stay-card-footer text-xs text-secondary-foreground">
+      <article key={stay.id} aria-label={`Confirmed accommodation: ${stay.name}`} className="min-w-0 p-4 border border-border rounded-[7px] bg-surface shadow-(--shadow)">
+        <p className="flex items-center gap-1.5 text-muted-foreground text-[11px] font-normal"><Icon name="bed" width="13" height="13" />Confirmed stay</p>
+        <h3 className="mt-2 text-[13px] font-medium wrap-break-word">{stay.name}</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-3.5 pt-2.5 border-t border-t-border text-xs text-secondary-foreground">
           <a href={stay.mapsUrl} target="_blank" rel="noreferrer" draggable={false} className="hover:underline">Google Maps ↗</a>
-          <Link to={`/trips/${encodeURIComponent(tripId)}/accommodations?edit=${encodeURIComponent(stay.id)}`} draggable={false} aria-label={`Edit ${stay.name}`} className="ui-button">Edit</Link>
+          <Link to={`/trips/${encodeURIComponent(tripId)}/accommodations?edit=${encodeURIComponent(stay.id)}`} draggable={false} aria-label={`Edit ${stay.name}`} className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed">Edit</Link>
         </div>
       </article>
     ))}
@@ -718,7 +718,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
         <div className="min-w-0"><TripMap columns={tripColumns} apiKey={googleMapsBrowserApiKey} onOpenCard={openCard} /></div>
         <TripChat key={trip.id} tripId={trip.code ?? trip.id} columns={tripColumns} onOpenCard={openCard} />
       </div> : <>
-      <div className="board-toolbar">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4.5 [&_>_p]:text-muted-foreground [&_>_p]:text-[12px]">
       <p>{tripColumns.filter((column) => column.date !== null).length} days · {tripColumns.reduce((count, column) => count + column.cards.length, 0)} cards</p>
       <addDayFetcher.Form
         className="flex flex-wrap items-end gap-2.5"
@@ -730,7 +730,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
             Add a day
           </label>
           <input
-            className="ui-input"
+            className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
             id="trip-date"
             name="date"
             type="date"
@@ -744,7 +744,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
           />
         </div>
         <button
-          className="ui-button ui-button-primary"
+          className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary"
           type="submit"
           disabled={
             !selectedDate ||
@@ -769,7 +769,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
       </div>
       <CardDragBoard onMove={submitMove}>
       <section
-        className="planning-board auto-cols-[min(--spacing(80),90%)]"
+        className="relative grid grid-flow-col [align-items:start] gap-7 overflow-x-auto p-[2px_2px_20px] [@media(max-width:_760px)]:gap-5 auto-cols-[min(--spacing(80),90%)]"
         aria-label={`${trip.title} planning board`}
       >
         {displayedColumns.map((column) => column.date === null ? (
@@ -792,25 +792,25 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
 
       {activeCard && (
         <div
-          className="dialog-overlay"
+          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4 [background:rgb(0_0_0/25%)]"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeCard();
           }}
         >
           <section
-            className="ui-dialog w-3xl max-w-9/10"
+            className="max-h-[calc(100dvh-32px)] overflow-y-auto p-5 border border-border rounded-[10px] bg-surface text-foreground text-[13px] shadow-[0_8px_36px_rgb(0_0_0/12%)] [dialog]:fixed [dialog]:inset-0 [dialog]:w-[calc(100%-32px)] [dialog]:m-auto backdrop:[background:rgb(0_0_0/25%)] w-3xl max-w-9/10"
             role="dialog"
             aria-modal="true"
             aria-labelledby="card-dialog-heading"
           >
-            <div className="ui-dialog-header">
+            <div className="flex [align-items:start] justify-between gap-3 mb-5 [&_h2]:pt-1 [&_h2]:text-[15px] [&_h2]:font-[550] [&_h2]:tracking-[-.02em] [&_p]:mb-0.5 [&_p]:text-muted-foreground [&_p]:text-[11px]">
               <h2
                 id="card-dialog-heading"
               >
                 {activeCard.mode === "create" ? "Add card" : "Card details"}
               </h2>
               <button
-                className="icon-button ui-dialog-close"
+                className="grid w-8 h-8 place-items-center rounded-md text-muted-foreground [&:hover]:bg-muted [&:hover]:text-foreground text-[20px] leading-none"
                 type="button"
                 aria-label={
                   activeCard.mode === "create"
@@ -823,14 +823,14 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
               </button>
             </div>
 
-            {activeCard.mode === "edit" && <div className="card-dialog-panels" role="group" aria-label="Card view">
-              <button type="button" className="ui-button" aria-pressed={cardPanel === "details"} onClick={() => setCardPanel("details")}>Details</button>
-              <button type="button" className="ui-button" aria-pressed={cardPanel === "chat"} onClick={() => setCardPanel("chat")}>Chat</button>
+            {activeCard.mode === "edit" && <div className="flex gap-1 pb-3 mb-4.5 border-b border-b-border [&_button[aria-pressed='true']]:bg-muted [&_button[aria-pressed='true']]:text-foreground" role="group" aria-label="Card view">
+              <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" aria-pressed={cardPanel === "details"} onClick={() => setCardPanel("details")}>Details</button>
+              <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" aria-pressed={cardPanel === "chat"} onClick={() => setCardPanel("chat")}>Chat</button>
             </div>}
 
             <div hidden={cardPanel !== "details"}>
             <cardFetcher.Form
-              className="ui-form"
+              className="grid min-w-0 gap-4.5"
               method="post"
               encType="multipart/form-data"
               onSubmit={() => {
@@ -856,9 +856,9 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                 <input name="cardId" type="hidden" value={activeCard.cardId} />
               )}
 
-              <label className="ui-field">
+              <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">
                 Card type
-                <select className="ui-input" value={cardDraft.type} disabled={activeCard.mode === "edit"}
+                <select className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" value={cardDraft.type} disabled={activeCard.mode === "edit"}
                   onChange={(event) => setCardDraft((draft) => ({ ...draft, type: event.target.value as CardType }))}>
                   {Object.entries(cardTypes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
@@ -870,8 +870,8 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                 <input type="hidden" name="transportUtcOffset" value={activeCardDate && (cardDraft.departureTime || cardDraft.arrivalTime)
                   ? new Date(`${activeCardDate}T${cardDraft.departureTime || cardDraft.arrivalTime}:00`).getTimezoneOffset()
                   : ""} />
-                <label className="ui-field">Mode of transport
-                  <select className="ui-input" name="transportMode" value={cardDraft.transportMode} onChange={(event) => setCardDraft((draft) => ({ ...draft, transportMode: event.target.value }))}>
+                <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">Mode of transport
+                  <select className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" name="transportMode" value={cardDraft.transportMode} onChange={(event) => setCardDraft((draft) => ({ ...draft, transportMode: event.target.value }))}>
                     {Object.entries(transportModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
@@ -883,27 +883,27 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                   />
                 ))}
                 <details>
-                  <summary className="ui-label cursor-pointer">Times and service details</summary>
+                  <summary className="text-secondary-foreground text-[12px] font-medium cursor-pointer">Times and service details</summary>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     {([ ["departureTime", "departureTimezone", "Departure"], ["arrivalTime", "arrivalTimezone", "Arrival"] ] as const).map(([field, zoneField, label]) => (
                       <div key={field} className="grid gap-3">
-                        <label className="ui-field">{label} time
-                          <input className="ui-input" name={field} type="time" value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
+                        <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">{label} time
+                          <input className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" name={field} type="time" value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
                         </label>
                         <TimezoneField name={zoneField} label={`${label} time zone (optional)`}
                           timezone={cardDraft[zoneField]} placeholder={activeCardTimezone ? `Default: ${activeCardTimezone}` : "Use device time zone"}
                           onChange={(value) => setCardDraft((draft) => ({ ...draft, [zoneField]: value }))} disabled={cardFetcher.state !== "idle"} />
                       </div>
                     ))}
-                    <label className="ui-field">Service number
-                      <input className="ui-input" name="serviceNumber" value={cardDraft.serviceNumber} onChange={(event) => setCardDraft((draft) => ({ ...draft, serviceNumber: event.target.value }))} />
+                    <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">Service number
+                      <input className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" name="serviceNumber" value={cardDraft.serviceNumber} onChange={(event) => setCardDraft((draft) => ({ ...draft, serviceNumber: event.target.value }))} />
                     </label>
                   </div>
                 </details>
                 <p className="text-xs text-muted-foreground">Each time uses its own time zone override, or defaults to {activeCardTimezone ?? "your device’s time zone"}. Clear an override to use the default; entered clock times stay the same. Travel time is estimated when you save; departure takes priority when both times are entered.</p>
                 {activeSavedCard?.transportEstimate && (
                   <div className="grid gap-1">
-                    <p className="ui-label">Last saved travel-time estimate</p>
+                    <p className="text-secondary-foreground text-[12px] font-medium">Last saved travel-time estimate</p>
                     <TransportEstimateSummary estimate={activeSavedCard.transportEstimate} />
                   </div>
                 )}
@@ -937,11 +937,11 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
 
               {cardDraft.type !== "transport" && (
               <div className="grid gap-1.5">
-                <label className="ui-label" htmlFor="card-title">
+                <label className="text-secondary-foreground text-[12px] font-medium" htmlFor="card-title">
                   {cardDraft.type === "city" ? "City / area / region name" : "Title"}
                 </label>
                 <input
-                  className="ui-input"
+                  className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
                   id="card-title"
                   name="title"
                   ref={titleInputRef}
@@ -959,10 +959,10 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
               )}
 
               {cardDraft.type === "location" && (
-                <label className="ui-field">
+                <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">
                   Subcategory
                   <select
-                    className="ui-input"
+                    className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
                     name="locationCategory"
                     value={cardDraft.locationCategory}
                     onChange={(event) => setCardDraft((draft) => ({ ...draft, locationCategory: event.target.value }))}
@@ -1000,7 +1000,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
               {cardDraft.type !== "city" && <>
               <div className="grid gap-1.5">
                 <label
-                  className="ui-label"
+                  className="text-secondary-foreground text-[12px] font-medium"
                   htmlFor="card-description"
                 >
                   Description
@@ -1034,22 +1034,22 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                 </p>
               )}
 
-              <div className="ui-form-footer">
+              <div className="flex flex-wrap [justify-content:end] gap-1.5 pt-4 border-t border-t-border">
                 {activeCard.mode === "edit" && (
-                  <button type="button" className="ui-button ui-button-danger mr-auto"
+                  <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-destructive text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-destructive disabled:opacity-[.45] disabled:cursor-not-allowed mr-auto"
                     disabled={cardFetcher.state !== "idle"} onClick={confirmDeleteCard}>
                     {cardFetcher.state !== "idle" && cardFetcher.formData?.get("intent") === "delete-card" ? "Deleting…" : "Delete card"}
                   </button>
                 )}
                 <button
-                  className="ui-button"
+                  className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed"
                   type="button"
                   onClick={closeCard}
                 >
                   Cancel
                 </button>
                 <button
-                  className="ui-button ui-button-primary"
+                  className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary"
                   type="submit"
                   disabled={
                     (cardDraft.type === "transport" ? !cardDraft.startLocation.trim() || !cardDraft.endLocation.trim() : !cardDraft.title.trim()) || cardFetcher.state !== "idle"

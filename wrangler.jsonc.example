@@ -1,0 +1,47 @@
+/**
+ * Setup for your own Cloudflare account:
+ * 1. Copy this file to wrangler.jsonc before installing dependencies.
+ * 2. Install dependencies, then run: bunx wrangler login
+ * 3. Run: bunx wrangler d1 create kondo-db
+ *    Paste the returned database_id below.
+ * 4. Run: bunx wrangler r2 bucket create kondo-attachments
+ *    Keep the bucket private: disable public r2.dev access and public custom domains
+ *    in its Cloudflare settings. The app serves files through authenticated routes.
+ * 5. Copy .dev.vars.example to .dev.vars for local development.
+ *    Initialize the local database with: bunx wrangler d1 migrations apply DB --local
+ *    For production, use: bunx wrangler secret put <NAME>
+ *    Generate a fresh BETTER_AUTH_SECRET and set BETTER_AUTH_URL to your app URL.
+ *    Set CLOSED_BETA_EMAILS, TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY for signup.
+ *    Optional API keys are listed in .dev.vars.example.
+ * 6. Run: bun run deploy
+ *    Deployment builds the app, applies all D1 migrations, then publishes the Worker.
+ *
+ * wrangler.jsonc and local secret files are ignored by Git.
+ * Never put secret values in this template or in vars.
+ * Binding names DB and ATTACHMENTS must stay the same; resource names can change.
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "kondo",
+	"compatibility_date": "2026-09-11",
+	"main": "./workers/app.ts",
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "kondo-db",
+			"database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "ATTACHMENTS",
+			"bucket_name": "kondo-attachments",
+			// Local development uses local storage. This does not control public access.
+			"remote": false
+		}
+	],
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true
+}

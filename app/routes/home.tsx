@@ -102,23 +102,23 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
   return (
     <AppShell user={loaderData.currentUser}>
       <div className="mx-auto max-w-4xl">
-        <header className="page-heading">
+        <header className="flex flex-wrap items-center justify-between gap-3 mb-6 [&_h1]:text-[21px] [&_h1]:font-[550] [&_h1]:tracking-[-.035em] [&_h1]:leading-[1.3] [&_h1]:wrap-anywhere">
           <div>
             <h1>Your trips</h1>
           </div>
-          <span className="trip-count"><Icon name="trips" width="15" height="15" />{loaderData.trips.length} {loaderData.trips.length === 1 ? "trip" : "trips"}</span>
+          <span className="flex items-center gap-1.75 text-muted-foreground text-[12px]"><Icon name="trips" width="15" height="15" />{loaderData.trips.length} {loaderData.trips.length === 1 ? "trip" : "trips"}</span>
         </header>
 
         <Form
-          className="new-trip-panel"
+          className="mb-8 pb-6.5 border-b border-b-border"
           method="post"
         >
-          <label className="new-trip-title" htmlFor="trip-title">
+          <label className="block mb-2.5 text-secondary-foreground text-[12px] font-medium" htmlFor="trip-title">
             Add a new trip
           </label>
           <div className="flex gap-2.5 max-[600px]:flex-col">
             <input
-              className="ui-input flex-1"
+              className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer flex-1"
               id="trip-title"
               name="title"
               type="text"
@@ -130,7 +130,7 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
               disabled={busy}
             />
             <button
-              className="ui-button ui-button-primary"
+              className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary"
               type="submit"
               disabled={busy}
             >
@@ -148,7 +148,7 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
         </Form>
 
         {loaderData.trips.length === 0 ? (
-          <section className="empty-state py-16 text-center">
+          <section className="p-[18px_0] text-muted-foreground text-[12px] py-16 text-center">
             <h2 className="text-lg font-semibold">No trips yet</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
               Add a title above to create your first trip.
@@ -161,30 +161,30 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
 
               return (
                 <section key={section.id} aria-labelledby={`${section.id}-trips-heading`}>
-                  <div className="trip-section-heading">
+                  <div className="flex items-center gap-2.25 mb-3 [&_h2]:text-secondary-foreground [&_h2]:text-[12px] [&_h2]:font-medium">
                     <h2 id={`${section.id}-trips-heading`}>
                       {section.title}
                     </h2>
-                    <span className="count-badge">
+                    <span className="inline-grid min-w-5 h-5 place-items-center p-[0_4px] text-muted-foreground text-[11px] font-normal tabular-nums">
                       {sectionTrips.length}
                     </span>
                   </div>
                   {sectionTrips.length === 0 ? (
-                    <p className="empty-state">
+                    <p className="p-[18px_0] text-muted-foreground text-[12px]">
                       {section.emptyMessage}
                     </p>
                   ) : (
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))] gap-4">
                       {sectionTrips.map((trip) => (
                         <Link
-                          className="trip-preview group"
+                          className="block min-w-0 p-4.25 border border-border rounded-[7px] bg-surface transition-[border-color] duration-150 [&:hover]:border-input [&_h3]:text-[13px] [&_h3]:font-medium [&_h3]:wrap-anywhere group"
                           key={trip.id}
                           to={`/trips/${trip.code ?? trip.id}`}
                         >
-                          <div className="trip-preview-title"><h3>
+                          <div className="flex items-center justify-between gap-3 [&_svg]:shrink-0"><h3>
                             {trip.title}
                           </h3><Icon name="arrow" className="text-muted-foreground" width="15" height="15" /></div>
-                          <p className="trip-preview-date">
+                          <p className="flex items-center gap-1.75 mt-3.5 text-muted-foreground text-[11px]">
                             <Icon name="calendar" width="14" height="14" />
                             {formatTripDates(trip.start, trip.end)}
                           </p>

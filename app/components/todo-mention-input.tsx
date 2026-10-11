@@ -43,8 +43,8 @@ export function TodoMentionInput({ members, disabled }: { members: TodoMember[];
   }
 
   return <div className="relative min-w-0 flex-1 basis-48">
-    <label htmlFor={id} className="ui-field">New to-do</label>
-    <input ref={input} id={id} className="ui-input mt-1.5" name="title" required maxLength={500} disabled={disabled}
+    <label htmlFor={id} className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">New to-do</label>
+    <input ref={input} id={id} className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer mt-1.5" name="title" required maxLength={500} disabled={disabled}
       placeholder="Add a task, @name to tag" autoComplete="off" role="combobox" aria-autocomplete="list"
       aria-expanded={open} aria-controls={open ? `${id}-suggestions` : undefined}
       aria-activedescendant={open && selectedIndex >= 0 ? `${id}-option-${selectedIndex}` : undefined}
@@ -63,12 +63,12 @@ export function TodoMentionInput({ members, disabled }: { members: TodoMember[];
           choose(suggestions[selectedIndex]);
         }
       }} />
-    {open && <div className="todo-mention-menu">
-      <ul id={`${id}-suggestions`} role="listbox" aria-label="Board members" className="todo-member-list">
+    {open && <div className="p-1 border border-border rounded-lg bg-surface text-foreground shadow-[0_8px_24px_rgb(0_0_0/12%)] absolute z-20 top-[calc(100%+6px)] left-0 w-full min-w-[min(260px,calc(100vw-48px))]">
+      <ul id={`${id}-suggestions`} role="listbox" aria-label="Board members" className="max-h-60 overflow-y-auto">
         {suggestions.map((member, index) => <li key={member.id} id={`${id}-option-${index}`} role="option"
-          aria-selected={selectedIndex === index} className="todo-member-option"
+          aria-selected={selectedIndex === index} className="flex items-center gap-2.25 w-full py-1.75 px-2 rounded-[5px] text-[12px] cursor-pointer [&:hover]:bg-muted aria-selected:bg-muted aria-pressed:bg-muted"
           onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(member)}>
-          <span className="todo-avatar" aria-hidden="true">{Array.from(member.name.trim() || member.email)[0].toUpperCase()}</span>
+          <span className="inline-grid place-items-center shrink-0 w-7 h-7 rounded-[50%] bg-muted text-secondary-foreground text-[11px] font-semibold" aria-hidden="true">{Array.from(member.name.trim() || member.email)[0].toUpperCase()}</span>
           <span className="min-w-0"><span className="block truncate">{member.name}</span><span className="block truncate text-xs text-muted-foreground">{member.email}</span></span>
         </li>)}
       </ul>

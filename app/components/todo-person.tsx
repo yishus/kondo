@@ -36,7 +36,7 @@ export function TodoPerson({ members, ownerId, title, disabled, onChange }: {
 
   return <div className="shrink-0 py-1">
     <button ref={trigger} type="button" popoverTarget={id} disabled={disabled}
-      className={`todo-avatar todo-person-trigger ${owner ? "" : "todo-person-empty"}`}
+      className={`inline-grid place-items-center shrink-0 w-7 h-7 rounded-[50%] text-[11px] font-semibold border border-border [&:hover:not(:disabled)]:border-input [&:hover:not(:disabled)]:text-foreground aria-expanded:border-input aria-expanded:text-foreground disabled:opacity-[.5] disabled:cursor-wait ${owner ? "bg-muted text-secondary-foreground" : "border-dashed bg-transparent text-muted-foreground"}`}
       aria-label={owner ? `Change person tagged to ${title}: ${owner.name}` : `Tag a person to ${title}`}
       title={owner ? `Tagged: ${owner.name}` : "Tag a person"} aria-haspopup="dialog" aria-expanded={open}
       onClick={() => {
@@ -53,24 +53,24 @@ export function TodoPerson({ members, ownerId, title, disabled, onChange }: {
       }}>
       {owner ? Array.from(owner.name.trim() || owner.email)[0].toUpperCase() : <Icon name="plus" width="14" height="14" />}
     </button>
-    <div ref={popover} id={id} popover="auto" role="dialog" aria-label={`Tag a person to ${title}`} className="todo-person-popover"
+    <div ref={popover} id={id} popover="auto" role="dialog" aria-label={`Tag a person to ${title}`} className="p-1 border border-border rounded-lg bg-surface text-foreground shadow-[0_8px_24px_rgb(0_0_0/12%)] fixed inset-auto w-[min(280px,calc(100vw-16px))] m-0 overflow-y-auto"
       onToggle={(event) => {
         const isOpen = event.newState === "open";
         setOpen(isOpen);
         if (isOpen) (popover.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ?? popover.current?.querySelector<HTMLButtonElement>("button"))?.focus({ preventScroll: true });
       }}>
       <p className="px-3 py-2 text-xs font-medium text-muted-foreground">{owner ? "Change tagged person" : "Tag a board member"}</p>
-      <div className="todo-member-list">
-        {members.map((member) => <button key={member.id} type="button" className="todo-member-option" disabled={disabled}
+      <div className="max-h-60 overflow-y-auto">
+        {members.map((member) => <button key={member.id} type="button" className="flex items-center gap-2.25 w-full py-1.75 px-2 rounded-[5px] text-[12px] cursor-pointer [&:hover]:bg-muted aria-selected:bg-muted aria-pressed:bg-muted" disabled={disabled}
           aria-pressed={member.id === ownerId} onClick={() => choose(member.id)}>
-          <span className="todo-avatar" aria-hidden="true">{Array.from(member.name.trim() || member.email)[0].toUpperCase()}</span>
+          <span className="inline-grid place-items-center shrink-0 w-7 h-7 rounded-[50%] bg-muted text-secondary-foreground text-[11px] font-semibold" aria-hidden="true">{Array.from(member.name.trim() || member.email)[0].toUpperCase()}</span>
           <span className="min-w-0 flex-1 text-left"><span className="block truncate">{member.name}</span><span className="block truncate text-xs text-muted-foreground">{member.email}</span></span>
           {member.id === ownerId && <span aria-hidden="true">✓</span>}
         </button>)}
         {!members.length && <p className="px-3 py-2 text-xs text-muted-foreground">No board members available.</p>}
       </div>
       {ownerId && <div className="mt-1 border-t border-border pt-1"><button type="button" disabled={disabled}
-        className="todo-member-option text-destructive" onClick={() => choose("")}>Remove tagged person</button></div>}
+        className="flex items-center gap-2.25 w-full py-1.75 px-2 rounded-[5px] text-[12px] cursor-pointer [&:hover]:bg-muted aria-selected:bg-muted aria-pressed:bg-muted text-destructive" onClick={() => choose("")}>Remove tagged person</button></div>}
     </div>
   </div>;
 }

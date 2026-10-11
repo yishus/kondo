@@ -1,14 +1,18 @@
-# Enable Places API (New) in your Google Maps Platform project.
-# Copy this file to .dev.vars and set your server-side API key.
+# Copy this file to .dev.vars for local development; never commit filled-in keys.
+# For production, set sensitive values with: bunx wrangler secret put <NAME>
+# Enable Places API (New) and Routes API in your Google Maps Platform project.
+# Restrict this server-side key to the APIs used by this app.
 GOOGLE_MAPS_API_KEY=""
 
 # Local browser key for Maps JavaScript API map rendering and client-side Place details.
 # Enable Maps JavaScript API and Places API (New) for this key.
 # A Maps Demo Key is suitable for local development; do not use it in production.
+# This key is visible in the browser; restrict it to your app's HTTP referrers and APIs.
 GOOGLE_MAPS_BROWSER_API_KEY=""
 
 # Optional: enables Thunderforest Outdoors in the hike map layer picker.
 # Sent to the browser for direct tile requests. Get a key from thunderforest.com.
+# Treat this as a browser-visible key, not a server-only secret.
 THUNDERFOREST_API_KEY=""
 
 # Optional: Jev classifies location activities when Refresh times is pressed.

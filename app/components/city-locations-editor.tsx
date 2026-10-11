@@ -98,24 +98,24 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
   }
 
   return (
-    <fieldset className="ui-section" disabled={disabled}>
-      <legend className="ui-label">Locations in this area <span className="font-normal text-muted-foreground">(optional)</span></legend>
+    <fieldset className="grid min-w-0 gap-3 pt-4.5 border-t border-t-border [&_>_legend]:float-left [&_>_legend]:w-full [&_>_legend]:mb-0 [&_>_legend_+_*]:clear-both" disabled={disabled}>
+      <legend className="text-secondary-foreground text-[12px] font-medium">Locations in this area <span className="font-normal text-muted-foreground">(optional)</span></legend>
       <input type="hidden" name="cityLocations" value={JSON.stringify(items)} />
 
       {items.length > 0 && (
         <ol className="grid gap-2" aria-label="Locations added to this area">
           {items.map((item, index) => (
-            <li key={item.googlePlaceId} className="ui-saved-item">
+            <li key={item.googlePlaceId} className="p-[12px_0] border-b border-b-border">
               <div className="flex items-start gap-3">
                 <span className="grid size-6 shrink-0 place-items-center text-xs text-muted-foreground">{index + 1}</span>
                 <div className="min-w-0 flex-1">
-                  <a className="text-[13px] font-medium break-words text-primary hover:underline" href={googleMapsUrl(item.googlePlaceId, item.googleMapsQuery)} target="_blank" rel="noopener noreferrer">
+                  <a className="text-[13px] font-medium wrap-break-word text-primary hover:underline" href={googleMapsUrl(item.googlePlaceId, item.googleMapsQuery)} target="_blank" rel="noopener noreferrer">
                     {item.googlePlaceName || item.googleMapsQuery} <span aria-hidden="true">↗</span>
                   </a>
-                  <label className="ui-field mt-2">
+                  <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium mt-2">
                     Location type
                     <input
-                      className="ui-input"
+                      className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
                       list={`${id}-types`}
                       maxLength={50}
                       required
@@ -124,7 +124,7 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
                     />
                   </label>
                 </div>
-                <button type="button" className="ui-button ui-button-danger shrink-0" onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                <button type="button" className="inline-flex min-h-8.5 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-destructive text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-destructive disabled:opacity-[.45] disabled:cursor-not-allowed shrink-0" onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
                   Remove
                 </button>
               </div>
@@ -138,11 +138,11 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
       </datalist>
 
       <div>
-        <p className="ui-label mb-3">Add a Google Maps place</p>
-        <label className="ui-field">
+        <p className="text-secondary-foreground text-[12px] font-medium mb-3">Add a Google Maps place</p>
+        <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">
           Location type
           <input
-            className="ui-input"
+            className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
             list={`${id}-types`}
             maxLength={50}
             placeholder="Choose or enter your own type"
@@ -159,7 +159,7 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
               value={query}
               maxLength={200}
               autoComplete="off"
-              className="ui-input"
+              className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
               placeholder="e.g. Ghibli Museum, Tokyo"
               onChange={(event) => { clearResults(); setQuery(event.target.value); }}
               onKeyDown={(event) => {
@@ -170,7 +170,7 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
               }}
             />
           </label>
-          <button type="button" className="ui-button ui-button-outline" disabled={searching || query.trim().length < 2 || !locationType.trim() || items.length >= MAX_CITY_LOCATIONS} onClick={() => void search()}>
+          <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface" disabled={searching || query.trim().length < 2 || !locationType.trim() || items.length >= MAX_CITY_LOCATIONS} onClick={() => void search()}>
             {searching ? "Searching…" : "Search"}
           </button>
         </div>
@@ -184,9 +184,9 @@ export function CityLocationsEditor({ tripId, locations, disabled }: {
             <ul aria-label="Area location search results" className="max-h-52 overflow-y-auto">
               {results.map((place) => (
                 <li key={place.id} className="border-b border-border last:border-b-0">
-                  <button type="button" className="ui-button block w-full text-left" onClick={() => addPlace(place)}>
-                    <span className="block break-words">{place.name}</span>
-                    <span className="mt-0.5 block text-xs font-normal break-words text-muted-foreground">{place.address}</span>
+                  <button type="button" className="min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed block w-full text-left" onClick={() => addPlace(place)}>
+                    <span className="block wrap-break-word">{place.name}</span>
+                    <span className="mt-0.5 block text-xs font-normal wrap-break-word text-muted-foreground">{place.address}</span>
                   </button>
                   <PlaceAttributions place={place} />
                 </li>

@@ -53,7 +53,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function ThemeToggle() {
   const { theme, setTheme } = useContext(ThemeContext);
-  return <div className="theme-toggle" role="group" aria-label="Appearance">
+  return <div className="inline-flex shrink-0 gap-0.5 p-0.75 border border-border rounded-lg bg-surface shadow-(--shadow) [&_button]:grid [&_button]:w-7 [&_button]:h-6.5 [&_button]:place-items-center [&_button]:rounded-sm [&_button]:text-muted-foreground [&_button:hover]:bg-muted [&_button:hover]:text-foreground [&_button[aria-pressed='true']]:bg-muted [&_button[aria-pressed='true']]:text-foreground" role="group" aria-label="Appearance">
     {(["light", "dark", "system"] as const).map((value) => <button key={value} type="button" aria-label={`${value[0].toUpperCase()}${value.slice(1)} theme`} aria-pressed={theme === value} title={`${value[0].toUpperCase()}${value.slice(1)} theme`} onClick={() => setTheme(value)}>
       <Icon name={value === "light" ? "sun" : value === "dark" ? "moon" : "monitor"} width="16" height="16" />
     </button>)}

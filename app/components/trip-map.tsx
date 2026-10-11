@@ -86,10 +86,10 @@ export function TripMap({ columns, apiKey, onOpenCard }: {
           const tooltip = document.createElement("span");
           tooltip.textContent = title;
           const pin = document.createElement("span");
-          pin.className = `trip-map-pin${entry.type === "hike" ? " trip-map-pin-hike" : ""}`;
+          pin.className = `grid w-7 h-8 place-items-center border-2 border-white rounded-[50%_50%_50%_0] text-white shadow-[0_2px_6px_rgb(0_0_0/30%)] ${entry.type === "hike" ? "bg-[#15803d]" : "bg-[#2563eb]"}`;
           pin.textContent = "●";
           const marker = L.marker(entry.point, { title, alt: `Open ${title}`, keyboard: true,
-            icon: L.divIcon({ className: "trip-map-marker", html: pin, iconSize: [28, 36], iconAnchor: [14, 36] }),
+            icon: L.divIcon({ className: "focus-visible:[outline:3px_solid_#2563eb] focus-visible:outline-offset-4", html: pin, iconSize: [28, 36], iconAnchor: [14, 36] }),
           }).bindTooltip(tooltip).on("click", () => open(entry.cardId)).addTo(map);
           marker.getElement()?.addEventListener("keydown", (event) => {
             if (event.key === "Enter" || event.key === " ") {
@@ -125,8 +125,8 @@ export function TripMap({ columns, apiKey, onOpenCard }: {
         <p className="mt-1 text-xs text-muted-foreground">Click a pin to edit its card. Locations are blue; hikes are green. All trip days and Unscheduled are included.</p>
       </div>
       <div className="flex gap-2">
-        <button type="button" className="ui-button ui-button-outline" onClick={() => fitRef.current()} disabled={!ready || !resolved.some((entry) => entry.point)}>Fit all</button>
-        <button type="button" className="ui-button ui-button-outline" onClick={() => setAttempt((value) => value + 1)}>Retry map</button>
+        <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface" onClick={() => fitRef.current()} disabled={!ready || !resolved.some((entry) => entry.point)}>Fit all</button>
+        <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface" onClick={() => setAttempt((value) => value + 1)}>Retry map</button>
       </div>
     </div>
     <div className="relative isolate overflow-hidden rounded-xl border border-border bg-muted">
@@ -136,7 +136,7 @@ export function TripMap({ columns, apiKey, onOpenCard }: {
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label="Map cards">
         {entries.map((entry) => {
           const result = resolved.find((item) => item.cardId === entry.cardId);
-          return <button key={entry.cardId} type="button" className="ui-button ui-button-outline flex w-full min-w-0 items-start justify-start gap-3 text-left" onClick={() => open(entry.cardId)}>
+          return <button key={entry.cardId} type="button" className="min-h-8.5 shrink-0 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface flex w-full min-w-0 items-start justify-start gap-3 text-left" onClick={() => open(entry.cardId)}>
             <Icon name="pin" className={`shrink-0 ${entry.type === "hike" ? "text-green-700" : "text-blue-600"}`} />
             <span className="min-w-0 flex-1"><span className="block wrap-anywhere">{entry.title}</span>
               <span className="mt-1 block text-xs font-normal text-muted-foreground">{entry.day} · {entry.type === "hike" ? "Hike" : "Location"}</span>

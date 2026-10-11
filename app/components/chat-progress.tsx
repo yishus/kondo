@@ -1,3 +1,4 @@
+import { MarkdownContent } from "./markdown-content";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -76,10 +77,10 @@ function AsciiSpinner() {
 export function ChatToolActivity({ tools, interrupted = false }: { tools?: ChatToolCall[]; interrupted?: boolean }) {
   if (!tools?.length) return null;
   return <ul className="mb-3 grid gap-2 text-xs text-muted-foreground" aria-label="Tool activity">
-    {tools.map((tool) => <li key={tool.id} className="min-w-0 break-words">
+    {tools.map((tool) => <li key={tool.id} className="min-w-0 wrap-break-word">
       <span className="font-mono" aria-hidden="true">{tool.status === "completed" ? "[x]" : interrupted ? "[!]" : "[>]"}</span>{" "}
       {tool.name} · {tool.status === "completed" ? "Done" : interrupted ? "Interrupted" : "Running"}
-      {tool.detail && <p className="mt-1 break-words pl-6">{tool.detail}</p>}
+      {tool.detail && <p className="mt-1 wrap-break-word pl-6">{tool.detail}</p>}
     </li>)}
   </ul>;
 }
@@ -88,14 +89,14 @@ export function ChatProgress({ stream }: { stream: ReturnType<typeof useChatStre
   if (!stream.question) return null;
   const running = stream.tools.filter((tool) => tool.status === "running").at(-1);
   return <>
-    <article className="card-chat-message card-chat-user"><p className="card-chat-speaker">You</p><p className="whitespace-pre-wrap">{stream.question}</p></article>
-    <article className="card-chat-message card-chat-assistant">
-      <p className="card-chat-speaker">Sol</p>
+    <article className="p-3.5 mb-3 rounded-lg wrap-anywhere ml-6 bg-muted"><p className="mb-2 text-muted-foreground text-[11px] font-semibold">You</p><p className="whitespace-pre-wrap">{stream.question}</p></article>
+    <article className="p-3.5 mb-3 rounded-lg wrap-anywhere border border-border">
+      <p className="mb-2 text-muted-foreground text-[11px] font-semibold">Sol</p>
       <ChatToolActivity tools={stream.tools} interrupted={!stream.busy} />
-      {stream.text && <div className="markdown-content"><Markdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url) => safeChatUrl(url) ?? ""}
-        components={{ a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />, img: () => null }}>{stream.text}</Markdown></div>}
-      {stream.busy ? <p className="card-chat-pending flex items-center" role="status"><AsciiSpinner />{running ? `${running.name}…` : stream.status}</p>
-        : <p className="card-chat-pending">Reply interrupted. Reload the chat or retry your message below.</p>}
+      {stream.text && <MarkdownContent><Markdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url) => safeChatUrl(url) ?? ""}
+        components={{ a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />, img: () => null }}>{stream.text}</Markdown></MarkdownContent>}
+      {stream.busy ? <p className="p-3 text-muted-foreground flex items-center" role="status"><AsciiSpinner />{running ? `${running.name}…` : stream.status}</p>
+        : <p className="p-3 text-muted-foreground">Reply interrupted. Reload the chat or retry your message below.</p>}
     </article>
   </>;
 }

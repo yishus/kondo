@@ -5,9 +5,10 @@
 	"scripts": {
 		"build": "react-router build",
 		"db:schema:sql": "drizzle-kit export",
+		"db:migrate": "wrangler d1 migrations apply DB --remote",
 		"dev": "react-router dev",
 		"typecheck": "wrangler types && react-router typegen && tsc -b",
-		"deploy": "bun run build && wrangler deploy",
+		"deploy": "bun run build && bun run db:migrate && wrangler deploy",
 		"preview": "bun run build && vite preview",
 		"cf-typegen": "wrangler types",
 		"postinstall": "wrangler types"

@@ -1,3 +1,4 @@
+import { MarkdownContent } from "./markdown-content";
 import { ChatProgress, ChatToolActivity, useChatStream } from "./chat-progress";
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
@@ -65,61 +66,61 @@ export function CardChat({ tripId, cardId, type, active, date, timezone }: {
   }
 
   return (
-    <section className="card-chat" aria-label="Chat about this card">
-      <div className="card-chat-heading">
+    <section className="text-[13px]" aria-label="Chat about this card">
+      <div className="flex justify-between items-center gap-3 [&_h3]:font-semibold [&_p]:text-muted-foreground [&_p]:text-[11px] [&_p]:leading-[1.6]">
         <div>
           <h3>Chat about this card</h3>
           <p>Sol · Web search available</p>
         </div>
-        {messages.length > 0 && <button type="button" className="ui-button" disabled={busy} onClick={() => {
+        {messages.length > 0 && <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" disabled={busy} onClick={() => {
           if (window.confirm("Clear your conversation about this card and start a new chat?")) {
             void fetcher.submit({ intent: "clear" }, { method: "post", action: endpoint });
           }
         }}>New chat</button>}
       </div>
-      <p className="card-chat-context">{date ?? "Unscheduled"} · {timezone ?? "Time zone not set"}. Uses saved card details and any estimated timing. Save card edits before asking about them.</p>
-      <div className="card-chat-log" ref={log} role="log" aria-label="Conversation" aria-live="polite" aria-busy={busy}>
+      <p className="text-muted-foreground text-[11px] leading-[1.6] mt-2.5">{date ?? "Unscheduled"} · {timezone ?? "Time zone not set"}. Uses saved card details and any estimated timing. Save card edits before asking about them.</p>
+      <div className="min-h-45 max-h-[min(48dvh,520px)] overflow-y-auto overscroll-contain m-[16px_0] pr-1" ref={log} role="log" aria-label="Conversation" aria-live="polite" aria-busy={busy}>
         {!loaded && !error && <p className="text-muted-foreground">Loading your chat…</p>}
-        {loaded && !messages.length && <div className="card-chat-empty">
+        {loaded && !messages.length && <div className="p-[20px_0] leading-[1.7]">
           <p>Ask about this {type === "city" ? "area" : type === "location" ? "place" : type}.</p>
           <p className="text-muted-foreground">Use the card as a starting point, then ask follow-up questions.</p>
-          {available && <div className="card-chat-prompts">{prompts[type].map((prompt) => <button type="button" className="ui-button ui-button-outline" key={prompt} disabled={busy} onClick={() => send(prompt)}>{prompt}</button>)}</div>}
+          {available && <div className="flex flex-wrap gap-2 mt-4 [&_button]:text-left [&_button]:shrink">{prompts[type].map((prompt) => <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface" key={prompt} disabled={busy} onClick={() => send(prompt)}>{prompt}</button>)}</div>}
         </div>}
-        {messages.map((message) => <article className={`card-chat-message card-chat-${message.role}`} key={message.id}>
-          <p className="card-chat-speaker">{message.role === "user" ? "You" : "Sol"}</p>
+        {messages.map((message) => <article className={`p-3.5 mb-3 rounded-lg wrap-anywhere ${message.role === "user" ? "ml-6 bg-muted" : "border border-border"}`} key={message.id}>
+          <p className="mb-2 text-muted-foreground text-[11px] font-semibold">{message.role === "user" ? "You" : "Sol"}</p>
           {message.role === "user" ? <p className="whitespace-pre-wrap">{message.text}</p> : <>
             <ChatToolActivity tools={message.toolCalls} />
-            <div className="markdown-content">
+            <MarkdownContent>
               <Markdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url) => safeChatUrl(url) ?? ""} components={{
                 a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
                 img: () => null,
               }}>{citedMarkdown(message)}</Markdown>
-            </div>
-            {message.citations.length > 0 && <div className="card-chat-sources" aria-label="Sources">
+            </MarkdownContent>
+            {message.citations.length > 0 && <div className="flex flex-wrap gap-[8px_12px] mt-4 pt-2.5 border-t border-t-border text-[11px] [&_a]:text-muted-foreground [&_a]:underline [&_a]:underline-offset-[3px]" aria-label="Sources">
               {[...new Map(message.citations.filter((citation) => safeChatUrl(citation.url)).map((citation) => [citation.url, citation])).values()].map((citation) => <a key={citation.url} href={citation.url} target="_blank" rel="noopener noreferrer">{citation.title} ↗</a>)}
             </div>}
           </>}
         </article>)}
         <ChatProgress stream={stream} />
       </div>
-      {available === false && <p className="card-chat-notice">Chat is not configured yet. Add OPENAI_API_KEY to the server to enable Sol.</p>}
-      {!busy && error && <div className="card-chat-notice" role="alert">
+      {available === false && <p className="m-[12px_0] p-3 border border-border rounded-md text-muted-foreground">Chat is not configured yet. Add OPENAI_API_KEY to the server to enable Sol.</p>}
+      {!busy && error && <div className="m-[12px_0] p-3 border border-border rounded-md text-muted-foreground" role="alert">
         <p>{error}</p>
-        <button type="button" className="ui-button" onClick={() => void load(endpoint)}>Reload chat</button>
+        <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" onClick={() => void load(endpoint)}>Reload chat</button>
       </div>}
-      {full && <p className="card-chat-notice">This conversation is full. Start a new chat to continue.</p>}
-      <form className="card-chat-composer" onSubmit={(event) => { event.preventDefault(); send(draft); }}>
+      {full && <p className="m-[12px_0] p-3 border border-border rounded-md text-muted-foreground">This conversation is full. Start a new chat to continue.</p>}
+      <form className="[&_textarea]:resize-y [&_textarea]:max-h-50" onSubmit={(event) => { event.preventDefault(); send(draft); }}>
         <label className="sr-only" htmlFor={`chat-message-${cardId}`}>Message about this card</label>
-        <textarea id={`chat-message-${cardId}`} className="ui-input" rows={3} value={draft}
+        <textarea id={`chat-message-${cardId}`} className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" rows={3} value={draft}
           maxLength={MAX_CHAT_MESSAGE_LENGTH} disabled={busy || !available || !loaded || full}
           placeholder={type === "hike" ? "Ask about the route, weather, or trail conditions…" : "Ask about this card…"}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(draft); }
           }} />
-        <div className="card-chat-composer-footer">
+        <div className="flex items-center justify-between gap-4 mt-2 [&_p]:max-w-97.5 [&_p]:text-[11px] [&_p]:text-muted-foreground [&_p]:leading-normal">
           <p>Your chat is private to you. Card context and messages are sent to OpenAI when you ask.</p>
-          <button className="ui-button ui-button-primary" type="submit" disabled={busy || !available || !loaded || full || !draft.trim()}>{busy ? "Working…" : "Send"}</button>
+          <button className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary" type="submit" disabled={busy || !available || !loaded || full || !draft.trim()}>{busy ? "Working…" : "Send"}</button>
         </div>
       </form>
     </section>

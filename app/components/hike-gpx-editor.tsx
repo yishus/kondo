@@ -15,15 +15,15 @@ export function HikeGpxEditor({ tripId, title, attachment, disabled, distanceKm,
   const request = useRef(0);
   const url = attachment ? attachmentUrl(tripId, attachment.cardId, attachment.id) : undefined;
 
-  return <fieldset className="ui-section" disabled={disabled}>
-    <legend className="ui-label">Hike route</legend>
+  return <fieldset className="grid min-w-0 gap-3 pt-4.5 border-t border-t-border [&_>_legend]:float-left [&_>_legend]:w-full [&_>_legend]:mb-0 [&_>_legend_+_*]:clear-both" disabled={disabled}>
+    <legend className="text-secondary-foreground text-[12px] font-medium">Hike route</legend>
     {attachment && <div className="flex items-center justify-between gap-3 text-sm">
       <a href={`${url}?download=1`} className={`break-all text-primary hover:underline ${removed ? "line-through" : ""}`}>{attachment.filename}</a>
-      <button type="button" className="ui-button" onClick={() => setRemoved(!removed)}>{removed ? "Keep file" : "Remove"}</button>
+      <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" onClick={() => setRemoved(!removed)}>{removed ? "Keep file" : "Remove"}</button>
       {removed && <input type="hidden" name="removeGpx" value="1" />}
     </div>}
-    <label className="ui-field">{attachment ? "Replace GPX file" : "GPX file"}
-      <input ref={input} type="file" name="gpx" accept=".gpx,application/gpx+xml" className="ui-input"
+    <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">{attachment ? "Replace GPX file" : "GPX file"}
+      <input ref={input} type="file" name="gpx" accept=".gpx,application/gpx+xml" className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
         aria-describedby="gpx-help" aria-invalid={Boolean(error)} onChange={async (event) => {
           const current = ++request.current;
           const field = event.currentTarget;

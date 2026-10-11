@@ -29,10 +29,10 @@ export function CardSearch({ tripId, columns, onOpenCard }: {
   return <section aria-label="Card search" className="mb-4">
     <div className="flex items-center gap-2">
       <label htmlFor={id} className="sr-only">Search cards</label>
-      <input id={id} type="search" className="ui-input w-full sm:max-w-md" value={text} maxLength={MAX_CARD_SEARCH_LENGTH}
+      <input id={id} type="search" className="min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer w-full sm:max-w-md" value={text} maxLength={MAX_CARD_SEARCH_LENGTH}
         placeholder="Search cards in this trip…" aria-describedby={`${id}-hint`} aria-controls={`${id}-results`}
         onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setText(""); }} />
-      {text && <button type="button" className="ui-button" onClick={() => { setText(""); document.getElementById(id)?.focus(); }}>Clear search</button>}
+      {text && <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" onClick={() => { setText(""); document.getElementById(id)?.focus(); }}>Clear search</button>}
     </div>
     <p id={`${id}-hint`} className="mt-1.5 text-xs text-muted-foreground">Search titles, descriptions, places, and transport endpoints across all days.</p>
     <div id={`${id}-results`} aria-busy={busy}>
@@ -42,14 +42,14 @@ export function CardSearch({ tripId, columns, onOpenCard }: {
         </p>
         {!busy && !response?.error && <ul aria-label="Matching cards" className="mt-2 grid max-h-80 gap-1 overflow-y-auto">
           {results.map(({ id, card, day, excerpt }) => <li key={id}>
-            <button type="button" className="ui-button block w-full text-left" aria-haspopup="dialog" onClick={() => onOpenCard(card)}>
-              <span className="block break-words font-medium">{card.title}</span>
+            <button type="button" className="min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed block w-full text-left" aria-haspopup="dialog" onClick={() => onOpenCard(card)}>
+              <span className="block wrap-break-word font-medium">{card.title}</span>
               <span className="mt-1 block text-xs text-muted-foreground">{day} · {cardTypes[card.type]}</span>
-              {excerpt && excerpt !== card.title && <span className="mt-1 line-clamp-2 block break-words text-xs font-normal text-muted-foreground">{excerpt}</span>}
+              {excerpt && excerpt !== card.title && <span className="mt-1 line-clamp-2 block wrap-break-word text-xs font-normal text-muted-foreground">{excerpt}</span>}
             </button>
           </li>)}
         </ul>}
-        {!busy && response?.error && <button type="button" className="ui-button mt-2" onClick={() => void load(`/trips/${encodeURIComponent(tripId)}/card-search?${new URLSearchParams({ q: query })}`)}>Retry search</button>}
+        {!busy && response?.error && <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed mt-2" onClick={() => void load(`/trips/${encodeURIComponent(tripId)}/card-search?${new URLSearchParams({ q: query })}`)}>Retry search</button>}
       </div>}
     </div>
   </section>;

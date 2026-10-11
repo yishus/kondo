@@ -97,7 +97,7 @@ export function CardDragBoard({ children, onMove }: {
     >
       {children}
       <DragOverlay dropAnimation={null}>
-        {draggedCard && <div className="trip-card trip-card-overlay flex min-w-0 items-stretch rounded-[10px] border border-border bg-surface text-[0.9rem] leading-[1.45] text-foreground hover:border-input cursor-grabbing px-4 py-3.5 wrap-anywhere shadow-[0_8px_24px_rgb(9_30_66_/_25%)]">{draggedCard.title}</div>}
+        {draggedCard && <div className="flex min-w-0 items-stretch rounded-[10px] border border-border bg-surface text-[0.9rem] leading-[1.45] text-foreground hover:border-input cursor-grabbing px-4 py-3.5 wrap-anywhere shadow-[0_8px_24px_rgb(9_30_66/25%)]">{draggedCard.title}</div>}
       </DragOverlay>
     </DndContext>
   );
@@ -116,7 +116,7 @@ export function CardDropSlot({ destination, label, disabled, children }: {
   });
   return (
     <div ref={setNodeRef} className="card-drop-slot relative min-w-0 pt-2.5" data-over={isOver || undefined}>
-      {isOver && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[3px] h-[3px] rounded-[2px] bg-primary" />}
+      {isOver && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0.75 h-0.75 rounded-xs bg-primary" />}
       {children}
     </div>
   );
@@ -133,7 +133,7 @@ export function DraggableCard({ card, disabled, onOpen }: {
   const gpx = card.attachments.find((item) => item.contentType === GPX_CONTENT_TYPE);
   const attachmentCount = card.attachments.filter((item) => item.contentType !== GPX_CONTENT_TYPE).length;
   return (
-    <div ref={setNodeRef} className="trip-card flex min-w-0 items-stretch rounded-[9px] border border-border bg-surface text-[0.9rem] leading-[1.45] text-foreground transition-colors hover:border-input data-[dragging]:opacity-30" data-card-type={card.type} data-dragging={isDragging || undefined}>
+    <div ref={setNodeRef} className="shadow-(--shadow) flex min-w-0 items-stretch rounded-[9px] border border-border bg-surface text-[0.9rem] leading-[1.45] text-foreground transition-colors hover:border-input data-dragging:opacity-30" data-card-type={card.type} data-dragging={isDragging || undefined}>
       <button
         ref={setActivatorNodeRef}
         type="button"
@@ -151,7 +151,7 @@ export function DraggableCard({ card, disabled, onOpen }: {
       </button>
       <div className="flex min-w-0 flex-1 flex-col">
         <CardCover card={card} />
-        <span className="card-type-label" data-card-label={card.type === "location" ? card.locationCategory ?? "location" : card.type}>
+        <span className="flex items-center gap-1.25 mt-3 text-muted-foreground text-[10px] font-normal data-[card-label='hike']:text-[light-dark(#15803d,#86efac)] data-[card-label='food']:text-[light-dark(#c2410c,#fdba74)] data-[card-label='place\_of\_interest']:text-[light-dark(#7e22ce,#d8b4fe)] data-[card-label='location']:text-[light-dark(#0f766e,#5eead4)] data-[card-label='city']:text-[light-dark(#0e7490,#67e8f9)] data-[card-label='transport']:text-[light-dark(#1d4ed8,#93c5fd)]" data-card-label={card.type === "location" ? card.locationCategory ?? "location" : card.type}>
           <Icon name={card.type === "transport" ? "route" : card.type === "city" ? "compass" : "pin"} width="11" height="11" />
           {card.type === "transport"
             ? transportModes[card.transportMode as keyof typeof transportModes] ?? "Transport"
@@ -159,7 +159,7 @@ export function DraggableCard({ card, disabled, onOpen }: {
               ? `${cardTypes.location} · ${locationCategories[card.locationCategory]}`
               : cardTypes[card.type]}
         </span>
-        <button type="button" className={`trip-card-title min-w-0 flex-1 cursor-pointer rounded-r-[9px] pt-1 pr-3 text-left wrap-anywhere disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${card.type === "city" ? "pb-1" : "pb-3"}`} aria-haspopup="dialog" onClick={onOpen} disabled={disabled}>
+        <button type="button" className={`font-medium text-[13px] min-w-0 flex-1 cursor-pointer rounded-r-[9px] pt-1 pr-3 text-left wrap-anywhere disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${card.type === "city" ? "pb-1" : "pb-3"}`} aria-haspopup="dialog" onClick={onOpen} disabled={disabled}>
           {card.title}
         </button>
         {card.type === "city" && (

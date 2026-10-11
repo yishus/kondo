@@ -1,3 +1,4 @@
+import { MarkdownContent } from "./markdown-content";
 import { useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -53,11 +54,11 @@ export function MarkdownEditor({
   }
 
   const renderedContent = value.trim() ? (
-    <div className="markdown-content">
+    <MarkdownContent>
       <Markdown remarkPlugins={[remarkGfm]} skipHtml components={{
         a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
       }}>{value}</Markdown>
-    </div>
+    </MarkdownContent>
   ) : <p className="text-muted-foreground">{emptyMessage}</p>;
 
   if (!editing) {
@@ -65,7 +66,7 @@ export function MarkdownEditor({
       <div className="min-w-0 text-sm">
         <input type="hidden" name={name} value={value} />
         <div className="mb-2 flex justify-end">
-          <button id={id} type="button" className="ui-button" disabled={disabled}
+          <button id={id} type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" disabled={disabled}
             aria-label={`Edit ${label.toLowerCase()}`} onClick={() => { setTab("write"); setEditing(true); }}>
             Edit
           </button>
@@ -76,9 +77,9 @@ export function MarkdownEditor({
   }
 
   return (
-    <div className="markdown-editor">
-      <div className="markdown-editor-header">
-        <div role="tablist" aria-label={`${label} editor`} className="markdown-editor-tabs">
+    <div className="min-w-0 overflow-hidden border border-border rounded-md bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-[4px_12px] p-[6px_8px_0] border-b border-b-border bg-background">
+        <div role="tablist" aria-label={`${label} editor`} className="flex gap-1 [&_button]:-mb-px [&_button]:py-2 [&_button]:px-2.5 [&_button]:border [&_button]:border-transparent [&_button]:rounded-[5px_5px_0_0] [&_button]:text-muted-foreground [&_button]:text-[12px] [&_button[aria-selected='true']]:border-border [&_button[aria-selected='true']]:border-b-surface [&_button[aria-selected='true']]:bg-surface [&_button[aria-selected='true']]:text-foreground [&_button:focus-visible]:outline-offset-[-3px]">
           {(["write", "preview"] as const).map((mode, index) => (
             <button
               key={mode}
@@ -103,7 +104,7 @@ export function MarkdownEditor({
           ))}
         </div>
         {tab === "write" && (
-          <div className="markdown-editor-tools" role="group" aria-label="Markdown formatting">
+          <div className="[&_button:focus-visible]:outline-offset-[-3px] flex flex-wrap gap-0.5 pb-1.25 [&_button]:grid [&_button]:w-7 [&_button]:h-7 [&_button]:place-items-center [&_button]:rounded-sm [&_button]:text-secondary-foreground [&_button]:text-[13px] [&_button:hover:not(:disabled)]:bg-muted [&_button:hover:not(:disabled)]:text-foreground [&_button:disabled]:opacity-[.45] [&_button:disabled]:cursor-not-allowed" role="group" aria-label="Markdown formatting">
             {formats.map((item, index) => (
               <button key={item.label} type="button" aria-label={item.label} title={item.label}
                 disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => format(index)}>
@@ -117,7 +118,7 @@ export function MarkdownEditor({
         <textarea
           ref={textarea}
           autoFocus
-          className="markdown-editor-input"
+          className="block w-full min-h-45 resize-y p-3 border-0 font-[ui-monospace,monospace] text-[13px] leading-[1.65] focus-visible:-outline-offset-2 read-only:opacity-[.6]"
           id={id}
           name={name}
           value={value}
@@ -135,12 +136,12 @@ export function MarkdownEditor({
         />
       </div>
       <div role="tabpanel" id={`${id}-preview-panel`} aria-labelledby={`${id}-preview-tab`}
-        hidden={tab !== "preview"} tabIndex={0} className="markdown-editor-preview">
+        hidden={tab !== "preview"} tabIndex={0} className="min-h-45 p-3 text-[13px] leading-[1.65] wrap-anywhere focus-visible:-outline-offset-2">
         {tab === "preview" && renderedContent}
       </div>
-      <div className="markdown-editor-hint flex items-center justify-between gap-2">
+      <div className="py-2 px-3 border-t border-t-border text-muted-foreground text-[11px] flex items-center justify-between gap-2">
         <p id={`${id}-hint`}>Markdown supported. {saveHint}</p>
-        <button type="button" className="ui-button" disabled={disabled} onClick={() => {
+        <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" disabled={disabled} onClick={() => {
           setEditing(false);
           requestAnimationFrame(() => document.getElementById(id)?.focus());
         }}>Done</button>

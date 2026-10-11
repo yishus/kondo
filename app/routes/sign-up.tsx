@@ -61,17 +61,17 @@ export default function SignUp({ actionData, loaderData }: Route.ComponentProps)
         <p className="mt-2 text-sm text-muted-foreground">Kondo is in closed beta. Create an account with an allowlisted email.</p>
         <Form method="post" className="mt-7 grid gap-4">
           <input type="hidden" name="returnTo" value={loaderData.returnTo} />
-          <label className="ui-field">
+          <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">
             Name
-            <input className="ui-input" name="name" autoComplete="name" maxLength={100} required />
+            <input className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" name="name" autoComplete="name" maxLength={100} required />
           </label>
-          <label className="ui-field">
+          <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">
             Email
-            <input className="ui-input" name="email" type="email" autoComplete="email" required />
+            <input className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" name="email" type="email" autoComplete="email" required />
           </label>
           <div className="grid gap-1.5 text-sm">
             <label className="font-semibold" htmlFor="sign-up-password">Password</label>
-            <input id="sign-up-password" aria-describedby="password-help" className="ui-input" name="password" type="password" autoComplete="new-password" minLength={8} maxLength={128} required />
+            <input id="sign-up-password" aria-describedby="password-help" className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" name="password" type="password" autoComplete="new-password" minLength={8} maxLength={128} required />
             <span id="password-help" className="text-muted-foreground">At least 8 characters.</span>
           </div>
           {loaderData.turnstileSiteKey ? (

@@ -172,7 +172,7 @@ function RouteCanvas({
 
   return (
     <div className="grid gap-3">
-      <div className="relative min-h-72 overflow-hidden rounded-[12px] border border-border bg-muted">
+      <div className="relative min-h-72 overflow-hidden rounded-xl border border-border bg-muted">
         <div ref={containerRef} className="absolute inset-0" aria-label={`Route map from ${origin} to ${destination}`} />
         {status === "loading" && (
           <div className="absolute inset-0 grid place-items-center bg-background/90 text-sm font-semibold text-secondary-foreground" role="status">
@@ -260,10 +260,10 @@ export function TransportRouteMap({
   useEffect(() => setClientReady(true), []);
 
   return (
-    <section className="ui-section" aria-labelledby="transport-route-heading">
+    <section className="grid min-w-0 gap-3 pt-4.5 border-t border-t-border [&_>_legend]:float-left [&_>_legend]:w-full [&_>_legend]:mb-0 [&_>_legend_+_*]:clear-both" aria-labelledby="transport-route-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="ui-label" id="transport-route-heading">Google Maps route</h3>
+          <h3 className="text-secondary-foreground text-[12px] font-medium" id="transport-route-heading">Google Maps route</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {mode === "walk"
               ? "Walking route between the start and end locations."
@@ -274,7 +274,7 @@ export function TransportRouteMap({
         </div>
         <button
           type="button"
-          className="ui-button ui-button-outline"
+          className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface"
           disabled={!apiKey || !origin.trim() || !destination.trim() || !plan.ok}
           onClick={() => setAttempt({ id: (attempt?.id ?? 0) + 1, signature })}
         >

@@ -77,19 +77,19 @@ export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled
   }
 
   return (
-    <fieldset className="ui-section" disabled={disabled}>
-      <legend className="ui-label">{label} {optional && <span className="font-normal text-muted-foreground">(optional)</span>}</legend>
+    <fieldset className="grid min-w-0 gap-3 pt-4.5 border-t border-t-border [&_>_legend]:float-left [&_>_legend]:w-full [&_>_legend]:mb-0 [&_>_legend_+_*]:clear-both" disabled={disabled}>
+      <legend className="text-secondary-foreground text-[12px] font-medium">{label} {optional && <span className="font-normal text-muted-foreground">(optional)</span>}</legend>
       {value && (
-        <div className="ui-saved-item">
+        <div className="p-[12px_0] border-b border-b-border">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 text-xs">
-              <p className="font-medium break-words">{selected?.name ?? value.name}</p>
-              {selected?.address && <p className="mt-1 text-xs break-words text-muted-foreground">{selected.address}</p>}
+              <p className="font-medium wrap-break-word">{selected?.name ?? value.name}</p>
+              {selected?.address && <p className="mt-1 text-xs wrap-break-word text-muted-foreground">{selected.address}</p>}
               <a className="mt-1 inline-block text-secondary-foreground hover:underline" href={googleMapsUrl(selected?.id ?? value.placeId ?? "", value.query)} target="_blank" rel="noopener noreferrer">
                 View on Google Maps <span aria-hidden="true">↗</span>
               </a>
             </div>
-            <button type="button" className="ui-button shrink-0" onClick={() => {
+            <button type="button" className="inline-flex min-h-8.5 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed shrink-0" onClick={() => {
               onChange(null, "");
               setSelected(null);
               clearSearch();
@@ -98,12 +98,12 @@ export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled
           {selected && <><PlaceAttributions place={selected} /><GoogleMapsAttribution /></>}
         </div>
       )}
-      <label className="ui-label" htmlFor={id}>
+      <label className="text-secondary-foreground text-[12px] font-medium" htmlFor={id}>
         {value ? "Search or paste a different Maps link" : "Search or paste a Google Maps link"}
       </label>
       <div className="flex gap-2">
         <input id={id} type="search" value={query} maxLength={8192} autoComplete="off"
-          className="ui-input flex-1"
+          className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer flex-1"
           placeholder="Place name or Google Maps URL" aria-describedby={`${id}-hint`}
           onChange={(event) => { clearSearch(); setQuery(event.target.value); }}
           onPaste={(event) => {
@@ -120,7 +120,7 @@ export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled
             }
           }}
         />
-        <button type="button" className="ui-button ui-button-outline" disabled={searching || query.trim().length < 2} onClick={() => void search()}>
+        <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface" disabled={searching || query.trim().length < 2} onClick={() => void search()}>
           {searching ? "Searching…" : "Search"}
         </button>
       </div>
@@ -134,9 +134,9 @@ export function GoogleMapsPlacePicker({ tripId, label, value, onChange, disabled
           <ul aria-label={`${label} search results`} className="max-h-52 overflow-y-auto">
             {results.map((place) => (
               <li key={place.id} className="border-b border-border last:border-b-0">
-                <button type="button" className="ui-button block w-full text-left" onClick={() => choose(place)}>
-                  <span className="block break-words">{place.name}</span>
-                  <span className="mt-0.5 block text-xs font-normal break-words text-muted-foreground">{place.address}</span>
+                <button type="button" className="min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed block w-full text-left" onClick={() => choose(place)}>
+                  <span className="block wrap-break-word">{place.name}</span>
+                  <span className="mt-0.5 block text-xs font-normal wrap-break-word text-muted-foreground">{place.address}</span>
                 </button>
                 <PlaceAttributions place={place} />
               </li>
