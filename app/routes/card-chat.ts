@@ -1,11 +1,11 @@
-import { resolveTripId } from "../trip-url.server";
+import { accessibleTripCondition } from "../trip-access.server";
 import { chatStreamResponse } from "../chat-stream.server";
 import type { ChatProgress, ChatToolCall } from "../chat-stream";
 import { env } from "cloudflare:workers";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { data } from "react-router";
 import type { Route } from "./+types/card-chat";
-import { requireTripOwner } from "../auth.server";
+import { requireUser } from "../auth.server";
 import { getDb } from "../db.server";
 import { cardChats, cards, rateLimit } from "../db/schema";
 import { MAX_CHAT_MESSAGES, MAX_CHAT_MESSAGE_LENGTH, type CardChatData, type ChatMessage } from "../card-chat";
@@ -17,11 +17,11 @@ const apiKey = () => (env as typeof env & { OPENAI_API_KEY?: string }).OPENAI_AP
 
 async function authorize(request: Request, tripId: string, cardId: string) {
   const db = getDb(env.DB);
-  tripId = await resolveTripId(db, tripId);
-  const user = await requireTripOwner(request, db, tripId);
-  const card = await db.select({ id: cards.id }).from(cards).where(and(eq(cards.id, cardId), eq(cards.tripId, tripId))).get();
+  const user = await requireUser(request);
+  const card = await db.select({ id: cards.id, tripId: cards.tripId }).from(cards)
+    .where(and(eq(cards.id, cardId), accessibleTripCondition(db, tripId, user.id, cards.tripId))).get();
   if (!card) throw new Response("Card not found", { status: 404 });
-  return { tripId, db, userId: user.id, scope: and(eq(cardChats.cardId, cardId), eq(cardChats.userId, user.id)) };
+  return { tripId: card.tripId, db, userId: user.id, scope: and(eq(cardChats.cardId, cardId), eq(cardChats.userId, user.id)) };
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {

@@ -6,6 +6,13 @@ export default [
   route("sign-up", "routes/sign-up.tsx"),
   route("sign-out", "routes/sign-out.ts"),
   route("api/auth/*", "routes/auth-api.ts"),
+  route("trips/:tripId/live", "routes/trip-live-layout.tsx", [
+    index("routes/trip-live.tsx"),
+    route("journal", "routes/trip-journal.tsx"),
+  ]),
+  route("trips/:tripId/live/itinerary", "routes/trip-live-itinerary-redirect.ts"),
+  route("trips/:tripId/live/chat", "routes/trip-live-chat.ts"),
+  route("trips/:tripId/live/journal/:entryId/images/:imageId", "routes/journal-image.ts"),
   route("trips/:tripId", "routes/trip-layout.tsx", [
     index("routes/trip.tsx"),
     route("map", "routes/trip-map.tsx"),

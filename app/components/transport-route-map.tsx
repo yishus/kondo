@@ -259,18 +259,20 @@ export function TransportRouteMap({
 
   useEffect(() => setClientReady(true), []);
 
+  if (!departureTime && !arrivalTime) return (
+    <section className="grid min-w-0 gap-3 border-t border-border pt-4.5" aria-labelledby="transport-route-heading">
+      <h3 className="text-[12px] font-medium text-secondary-foreground" id="transport-route-heading">Google Maps route</h3>
+      <p className="text-xs text-muted-foreground">Add a departure or arrival time to preview a scheduled transit route.</p>
+    </section>
+  );
+
   return (
     <section className="grid min-w-0 gap-3 pt-4.5 border-t border-t-border [&_>_legend]:float-left [&_>_legend]:w-full [&_>_legend]:mb-0 [&_>_legend_+_*]:clear-both" aria-labelledby="transport-route-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-secondary-foreground text-[12px] font-medium" id="transport-route-heading">Google Maps route</h3>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            {mode === "walk"
-              ? "Walking route between the start and end locations."
-              : plan.ok && plan.travelMode === "DRIVING" && !plan.requestTime
-                ? "General driving estimate; traffic at the specified time is not included."
-                : `Uses the trip day and ${departureTime ? "departure" : "arrival"} time in ${plan.ok ? plan.timeZone : timezone || "your device’s time zone"}.`}
-          </p>
+          {mode === "walk" && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Walking route between the start and end locations.</p>}
+          {plan.ok && plan.travelMode === "DRIVING" && !plan.requestTime && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">General driving estimate; traffic at the specified time is not included.</p>}
         </div>
         <button
           type="button"
@@ -282,7 +284,7 @@ export function TransportRouteMap({
         </button>
       </div>
       {!apiKey && <p className="text-sm font-medium text-destructive">Add GOOGLE_MAPS_BROWSER_API_KEY to .dev.vars to enable route previews.</p>}
-      {apiKey && !plan.ok && <p className="text-sm text-muted-foreground">{plan.error}</p>}
+      {apiKey && !plan.ok && <p className="text-xs text-muted-foreground">{plan.error}</p>}
       {plan.ok && plan.usesDepartureTime && departureTime && arrivalTime && (
         <p className="text-xs text-muted-foreground">This preview uses the departure time.</p>
       )}
@@ -296,7 +298,7 @@ export function TransportRouteMap({
         />
       )}
       {origin.trim() && destination.trim() && (
-        <a className="w-fit text-sm font-semibold text-primary hover:underline" href={directionsUrl} target="_blank" rel="noopener noreferrer">
+        <a className="w-fit text-xs font-medium text-primary hover:underline" href={directionsUrl} target="_blank" rel="noopener noreferrer">
           Open directions in Google Maps <span aria-hidden="true">↗</span>
         </a>
       )}

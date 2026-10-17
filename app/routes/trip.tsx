@@ -1,6 +1,6 @@
 import { resolveTripId } from "../trip-url.server";
 import { env } from "cloudflare:workers";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { useEffect, useRef, useState } from "react";
 import { data, Link, useFetcher } from "react-router";
 import { v7 as uuidv7 } from "uuid";
@@ -33,9 +33,12 @@ import { HikeGpxEditor } from "../components/hike-gpx-editor";
 import { GPX_CONTENT_TYPE } from "../hike-gpx";
 import { CardAttachments } from "../components/card-attachments";
 import { moveCard } from "../card-move.server";
+import { nextCardRank } from "../card-rank.server";
 import { deleteCard } from "../card-delete.server";
 import { previewCardMove, UNSCHEDULED_COLUMN_ID, type CardMove, type TripCard, type TripColumn } from "../card-order";
 import { CardDragBoard, CardDropSlot, DraggableCard } from "../components/card-drag";
+import { CardMoveDialog } from "../components/card-move-dialog";
+import { CardEditorTitle } from "../components/card-editor-title";
 import { Icon } from "../components/icon";
 import { TripMap } from "../components/trip-map";
 import { MarkdownEditor } from "../components/markdown-editor";
@@ -45,6 +48,13 @@ import { refreshDayEstimate } from "../day-estimate.server";
 type ActiveCard =
   | { mode: "create"; tripDayId: string }
   | { mode: "edit"; tripDayId: string; cardId: string };
+
+const cardTypePillClasses: Record<CardType, string> = {
+  location: "bg-[light-dark(#e6f5f2,#173b36)] text-[light-dark(#0f766e,#5eead4)]",
+  hike: "bg-[light-dark(#eaf6eb,#193a25)] text-[light-dark(#15803d,#86efac)]",
+  city: "bg-[light-dark(#e7f5fa,#163744)] text-[light-dark(#0e7490,#67e8f9)]",
+  transport: "bg-[light-dark(#eaf0ff,#1d2e52)] text-[light-dark(#1d4ed8,#93c5fd)]",
+};
 
 function formString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -281,11 +291,7 @@ export async function action({ params, request }: Route.ActionArgs) {
         ...details.details,
         transportEstimate,
         coverAttachmentId,
-        position: sql<number>`(
-          SELECT COALESCE(MAX(position) + 1, 0)
-          FROM cards
-          WHERE trip_id = ${trip.id} AND ${tripDayId === null ? isNull(cards.tripDayId) : eq(cards.tripDayId, tripDayId)}
-        )`,
+        position: nextCardRank(trip.id, tripDayId),
       }),
       ...areaLocations.locations.map((areaLocation, position) => db.insert(cityCardLocations).values({
         id: uuidv7(),
@@ -378,10 +384,11 @@ export function meta({ loaderData }: Route.MetaArgs) {
   ];
 }
 
-function UnscheduledColumn({ column, onAddCard, onOpenCard, moving }: {
+function UnscheduledColumn({ column, onAddCard, onOpenCard, onRequestMove, moving }: {
   column: TripColumn;
   onAddCard: (tripDayId: string) => void;
   onOpenCard: (card: TripCard) => void;
+  onRequestMove: (card: TripCard) => void;
   moving: boolean;
 }) {
   const destination = { tripDayId: column.id };
@@ -397,7 +404,7 @@ function UnscheduledColumn({ column, onAddCard, onOpenCard, moving }: {
       <div className="grid">
         {column.cards.map((card) => (
           <CardDropSlot key={card.id} destination={{ ...destination, beforeCardId: card.id }} label={`Before ${card.title}, Unscheduled`} disabled={moving}>
-            <DraggableCard card={card} disabled={moving} onOpen={() => onOpenCard(card)} />
+            <DraggableCard card={card} disabled={moving} onOpen={() => onOpenCard(card)} onRequestMove={onRequestMove} />
           </CardDropSlot>
         ))}
         <CardDropSlot destination={{ ...destination, beforeCardId: null }} label="End of Unscheduled" disabled={moving}>
@@ -434,6 +441,7 @@ function DayColumn({
   confirmedStays,
   onAddCard,
   onOpenCard,
+  onRequestMove,
   moving,
 }: {
   column: TripColumn & { date: string };
@@ -442,6 +450,7 @@ function DayColumn({
   confirmedStays: Route.ComponentProps["loaderData"]["confirmedStays"];
   onAddCard: (tripDayId: string) => void;
   onOpenCard: (card: TripCard) => void;
+  onRequestMove: (card: TripCard) => void;
   moving: boolean;
 }) {
   const fetcher = useFetcher<typeof action>();
@@ -474,7 +483,7 @@ function DayColumn({
           >
             {index === firstActivityIndex && startLabel}
             <EstimateLabels labels={estimateSlots[index]} />
-            <DraggableCard card={card} disabled={moving} onOpen={() => onOpenCard(card)} />
+            <DraggableCard card={card} disabled={moving} onOpen={() => onOpenCard(card)} onRequestMove={onRequestMove} />
           </CardDropSlot>
         ))}
         <CardDropSlot
@@ -577,13 +586,27 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
     beforeCardId: formString(moveFetcher.formData, "beforeCardId") || null,
   } : null;
   const displayedColumns = pendingMove ? previewCardMove(tripColumns, pendingMove) : tripColumns;
+  const [movingCard, setMovingCard] = useState<TripCard | null>(null);
+  const boardRef = useRef<HTMLElement>(null);
+
+  function scrollToColumn(columnId: string) {
+    const board = boardRef.current;
+    const column = board?.querySelector<HTMLElement>(`[data-trip-column="${CSS.escape(columnId)}"]`);
+    if (board && column) board.scrollTo({ left: column.offsetLeft - 2 });
+  }
 
   useEffect(() => {
     if (moving) return;
     if (!movedCardRef.current) return;
-    document.querySelector<HTMLButtonElement>(
-      `[data-card-handle="${CSS.escape(movedCardRef.current)}"]`,
-    )?.focus({ preventScroll: true });
+    const cardId = movedCardRef.current;
+    // Follow the saved card, including its original column if the move failed.
+    requestAnimationFrame(() => {
+      const mobile = window.matchMedia("(max-width: 760px)").matches;
+      const button = document.querySelector<HTMLButtonElement>(`[${mobile ? "data-card-move" : "data-card-handle"}="${CSS.escape(cardId)}"]`);
+      const columnId = button?.closest<HTMLElement>("[data-trip-column]")?.dataset.tripColumn;
+      if (mobile && columnId) scrollToColumn(columnId);
+      button?.focus({ preventScroll: true });
+    });
     movedCardRef.current = null;
   }, [moving]);
 
@@ -599,8 +622,9 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
   const [selectedDate, setSelectedDate] = useState("");
   const [addServerError, setAddServerError] = useState<string | null>(null);
   const [activeCard, setActiveCard] = useState<ActiveCard | null>(null);
-  const [cardPanel, setCardPanel] = useState<"details" | "chat">("details");
+  const [cardPanel, setCardPanel] = useState<"details" | "attachments" | "chat">("details");
   const [cardDraft, setCardDraft] = useState({ type: "location" as CardType, title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", startLocationName: "", endLocationName: "", departureTime: "", arrivalTime: "", departureTimezone: "", arrivalTimezone: "", serviceNumber: "" });
+  const [locationDetailsOpen, setLocationDetailsOpen] = useState(false);
   const [cardLocation, setCardLocation] = useState<CardLocation>({ googlePlaceId: null, googleMapsQuery: null });
   const [cardErrorFor, setCardErrorFor] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -637,6 +661,8 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
 
     addSubmissionStarted.current = false;
     if (addDayFetcher.data?.ok) {
+      const addedDay = tripColumns.find((column) => column.date === selectedDate);
+      if (addedDay) scrollToColumn(addedDay.id);
       setSelectedDate("");
       setAddServerError(null);
     } else {
@@ -662,15 +688,18 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
   useEffect(() => {
     if (!activeCard) return;
 
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const placeInput = activeCard.mode === "create"
-      ? document.querySelector<HTMLInputElement>('[aria-labelledby="card-dialog-heading"] input[type="search"]')
+      ? document.querySelector<HTMLInputElement>('[data-card-dialog] input[type="search"]')
       : null;
-    (placeInput ?? titleInputRef.current)?.focus();
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      document.querySelector<HTMLButtonElement>('[data-card-dialog] button[aria-label^="Close"]')?.focus({ preventScroll: true });
+    } else (placeInput ?? titleInputRef.current ?? document.querySelector<HTMLButtonElement>('[data-card-dialog] button[aria-label^="Close"]'))?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setActiveCard(null);
+      if (event.key === "Escape" && !event.defaultPrevented) setActiveCard(null);
     }
 
     document.addEventListener("keydown", handleKeyDown);
@@ -678,6 +707,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
   }, [activeCard]);
 
@@ -691,6 +721,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
 
   function addCard(tripDayId: string) {
     setCardPanel("details");
+    setLocationDetailsOpen(false);
     setCardLocation({ googlePlaceId: null, googleMapsQuery: null });
     setActiveCard({ mode: "create", tripDayId });
     setCardDraft({ type: "location", title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", startLocationName: "", endLocationName: "", departureTime: "", arrivalTime: "", departureTimezone: "", arrivalTimezone: "", serviceNumber: "" });
@@ -713,55 +744,11 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
 
   return (
     <>
-      <CardSearch key={trip.id} tripId={trip.code ?? trip.id} columns={tripColumns} onOpenCard={openCard} />
+      {view === "map" && <CardSearch key={trip.id} tripId={trip.code ?? trip.id} columns={tripColumns} onOpenCard={openCard} />}
       {view === "map" ? <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_--spacing(96)]">
         <div className="min-w-0"><TripMap columns={tripColumns} apiKey={googleMapsBrowserApiKey} onOpenCard={openCard} /></div>
         <TripChat key={trip.id} tripId={trip.code ?? trip.id} columns={tripColumns} onOpenCard={openCard} />
       </div> : <>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4.5 [&_>_p]:text-muted-foreground [&_>_p]:text-[12px]">
-      <p>{tripColumns.filter((column) => column.date !== null).length} days · {tripColumns.reduce((count, column) => count + column.cards.length, 0)} cards</p>
-      <addDayFetcher.Form
-        className="flex flex-wrap items-end gap-2.5"
-        method="post"
-      >
-        <input name="intent" type="hidden" value="add-day" />
-        <div className="flex flex-col gap-1.5">
-          <label className="sr-only" htmlFor="trip-date">
-            Add a day
-          </label>
-          <input
-            className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
-            id="trip-date"
-            name="date"
-            type="date"
-            value={selectedDate}
-            aria-describedby={addError ? "date-error" : undefined}
-            aria-invalid={Boolean(addError)}
-            onChange={(event) => {
-              setSelectedDate(event.target.value);
-              setAddServerError(null);
-            }}
-          />
-        </div>
-        <button
-          className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary"
-          type="submit"
-          disabled={
-            !selectedDate ||
-            dateAlreadyAdded ||
-            addDayFetcher.state !== "idle"
-          }
-        >
-          {addDayFetcher.state === "idle" ? "Add day" : "Adding…"}
-        </button>
-        {addError && (
-          <p className="w-full text-sm font-medium text-destructive" id="date-error">
-            {addError}
-          </p>
-        )}
-      </addDayFetcher.Form>
-      </div>
-
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <p className="sr-only">Drag a card’s handle to reorder it or move it between days and Unscheduled.</p>
         <p role="status">{moving ? "Saving move…" : moveFetcher.data?.ok ? "Move saved." : ""}</p>
@@ -769,11 +756,13 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
       </div>
       <CardDragBoard onMove={submitMove}>
       <section
-        className="relative grid grid-flow-col [align-items:start] gap-7 overflow-x-auto p-[2px_2px_20px] [@media(max-width:_760px)]:gap-5 auto-cols-[min(--spacing(80),90%)]"
+        className="relative grid grid-flow-col [align-items:start] gap-7 overflow-x-auto p-[2px_2px_20px] auto-cols-[min(--spacing(80),90%)] [@media(max-width:_760px)]:gap-4 [@media(max-width:_760px)]:snap-x [@media(max-width:_760px)]:snap-proximity"
+        ref={boardRef}
+        tabIndex={0}
         aria-label={`${trip.title} planning board`}
       >
-        {displayedColumns.map((column) => column.date === null ? (
-          <UnscheduledColumn key={column.id} column={column} onAddCard={addCard} onOpenCard={openCard} moving={moving} />
+        {displayedColumns.map((column) => <div key={column.id} data-trip-column={column.id} className="min-w-0 [@media(max-width:_760px)]:snap-start">{column.date === null ? (
+          <UnscheduledColumn column={column} onAddCard={addCard} onOpenCard={openCard} onRequestMove={setMovingCard} moving={moving} />
         ) : (
           <DayColumn
             column={{ ...column, date: column.date }}
@@ -783,250 +772,237 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
             key={column.id}
             onAddCard={addCard}
             onOpenCard={openCard}
+            onRequestMove={setMovingCard}
             moving={moving}
           />
-        ))}
+        )}</div>)}
+        <section aria-label="Add a day" className="min-w-0 [@media(max-width:_760px)]:snap-start">
+          <div className="flex min-h-9.5 items-center gap-2 border-b border-border p-[0_6px_8px]">
+            <Icon name="plus" width="16" height="16" className="text-muted-foreground" />
+            <h2 className="py-1 text-[13px] font-semibold">Add a day</h2>
+          </div>
+          <addDayFetcher.Form id="add-trip-day" method="post" className="mt-3 grid gap-3 rounded-lg border border-dashed border-border bg-surface p-4">
+            <input name="intent" type="hidden" value="add-day" />
+            <label htmlFor="trip-date" className="text-xs font-medium text-secondary-foreground">Date</label>
+            <input
+              id="trip-date"
+              name="date"
+              type="date"
+              aria-label="Add a day"
+              className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] aria-invalid:border-destructive [@media(max-width:_760px)]:min-h-11 [@media(max-width:_760px)]:text-base"
+              value={selectedDate}
+              aria-describedby={addError ? "date-error" : undefined}
+              aria-invalid={Boolean(addError)}
+              onChange={(event) => {
+                setSelectedDate(event.target.value);
+                setAddServerError(null);
+              }}
+            />
+            <button type="submit" className="inline-flex min-h-8.5 items-center justify-center gap-1.5 rounded-md bg-primary px-2.5 py-1.75 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-[.45] [@media(max-width:_760px)]:min-h-11" disabled={!selectedDate || dateAlreadyAdded || addDayFetcher.state !== "idle"}>
+              <Icon name="plus" width="16" height="16" />{addDayFetcher.state === "idle" ? "Add day" : "Adding…"}
+            </button>
+            {addError && <p role="alert" id="date-error" className="text-sm font-medium text-destructive">{addError}</p>}
+          </addDayFetcher.Form>
+        </section>
       </section>
       </CardDragBoard>
       </>}
 
+      {movingCard && <CardMoveDialog card={movingCard} columns={displayedColumns} onClose={() => setMovingCard(null)} onMove={submitMove} />}
       {activeCard && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4 [background:rgb(0_0_0/25%)]"
+          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4 [background:rgb(0_0_0/25%)] [@media(max-width:_760px)]:p-0 [@media(max-width:_760px)]:items-stretch"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeCard();
           }}
         >
           <section
-            className="max-h-[calc(100dvh-32px)] overflow-y-auto p-5 border border-border rounded-[10px] bg-surface text-foreground text-[13px] shadow-[0_8px_36px_rgb(0_0_0/12%)] [dialog]:fixed [dialog]:inset-0 [dialog]:w-[calc(100%-32px)] [dialog]:m-auto backdrop:[background:rgb(0_0_0/25%)] w-3xl max-w-9/10"
+            className="max-h-[calc(100dvh-32px)] overflow-y-auto p-5 border border-border rounded-[10px] bg-surface text-foreground text-[13px] shadow-[0_8px_36px_rgb(0_0_0/12%)] min-w-0 w-full max-w-full sm:w-3xl sm:max-w-9/10 [@media(max-width:_760px)]:w-full [@media(max-width:_760px)]:max-w-full [@media(max-width:_760px)]:h-dvh [@media(max-width:_760px)]:max-h-dvh [@media(max-width:_760px)]:rounded-none [@media(max-width:_760px)]:border-0 [@media(max-width:_760px)]:pt-[max(1.25rem,env(safe-area-inset-top))] [@media(max-width:_760px)]:[&_button]:min-h-11 [@media(max-width:_760px)]:[&_:is(input,select,textarea)]:text-[13px]"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="card-dialog-heading"
+            aria-label={activeCard.mode === "create" ? "Add card" : "Card details"}
+            data-card-dialog
+            onKeyDown={(event) => {
+              if (event.key !== "Tab") return;
+              const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]')).filter((element) => element.getClientRects().length > 0);
+              const first = controls[0];
+              const last = controls[controls.length - 1];
+              if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+              else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+            }}
           >
-            <div className="flex [align-items:start] justify-between gap-3 mb-5 [&_h2]:pt-1 [&_h2]:text-[15px] [&_h2]:font-[550] [&_h2]:tracking-[-.02em] [&_p]:mb-0.5 [&_p]:text-muted-foreground [&_p]:text-[11px]">
-              <h2
-                id="card-dialog-heading"
-              >
-                {activeCard.mode === "create" ? "Add card" : "Card details"}
-              </h2>
-              <button
-                className="grid w-8 h-8 place-items-center rounded-md text-muted-foreground [&:hover]:bg-muted [&:hover]:text-foreground text-[20px] leading-none"
-                type="button"
-                aria-label={
-                  activeCard.mode === "create"
-                    ? "Close add card dialog"
-                    : "Close card details"
-                }
-                onClick={closeCard}
-              >
-                <span aria-hidden="true">×</span>
-              </button>
+            <div className="mb-5 flex items-start justify-between gap-3">
+              {activeCard.mode === "create" ? <h2 className="pt-1 text-[18px] font-[550] tracking-[-.02em]">Add card</h2> : <CardEditorTitle
+                key={activeCardKey}
+                value={cardDraft.type === "transport"
+                  ? [cardDraft.startLocationName || cardDraft.startLocation, cardDraft.endLocationName || cardDraft.endLocation].filter(Boolean).join(" → ") || "Transport"
+                  : cardDraft.title}
+                label={cardDraft.type === "city" ? "City / area / region name" : "Title"}
+                editable={cardDraft.type !== "transport"} disabled={cardFetcher.state !== "idle"}
+                onEdit={() => setCardPanel("details")} onChange={(title) => setCardDraft((draft) => ({ ...draft, title }))}
+              />}
+              <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={activeCard.mode === "create" ? "Close add card dialog" : "Close card details"} onClick={closeCard}><Icon name="close" /></button>
             </div>
 
-            {activeCard.mode === "edit" && <div className="flex gap-1 pb-3 mb-4.5 border-b border-b-border [&_button[aria-pressed='true']]:bg-muted [&_button[aria-pressed='true']]:text-foreground" role="group" aria-label="Card view">
-              <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" aria-pressed={cardPanel === "details"} onClick={() => setCardPanel("details")}>Details</button>
-              <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" aria-pressed={cardPanel === "chat"} onClick={() => setCardPanel("chat")}>Chat</button>
+            {activeCard.mode === "edit" && <div className="mb-4.5 flex flex-wrap items-center gap-3 border-b border-border pb-3">
+              <div className="flex gap-1" role="tablist" aria-label="Card view">
+                {([ ["details", "Details"], ...(cardDraft.type === "city" ? [] : [["attachments", "Attachments"]]), ["chat", "Chat"] ] as [typeof cardPanel, string][]).map(([panel, label], index, tabs) => <button
+                  key={panel} id={`card-${panel}-tab`} type="button" role="tab" aria-selected={cardPanel === panel} aria-controls={`card-${panel}-panel`}
+                  tabIndex={cardPanel === panel ? 0 : -1}
+                  className="inline-flex min-h-8.5 items-center rounded-md px-2.5 py-1.75 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground aria-selected:bg-muted aria-selected:text-foreground"
+                  onClick={() => setCardPanel(panel)} onKeyDown={(event) => {
+                    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                    event.preventDefault();
+                    const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+                    setCardPanel(tabs[next][0]);
+                    document.getElementById(`card-${tabs[next][0]}-tab`)?.focus();
+                  }}>{label}</button>)}
+              </div>
             </div>}
 
-            <div hidden={cardPanel !== "details"}>
-            <cardFetcher.Form
-              className="grid min-w-0 gap-4.5"
-              method="post"
-              encType="multipart/form-data"
-              onSubmit={() => {
-                cardSubmissionKey.current =
-                  activeCard.mode === "create"
-                    ? `create:${activeCard.tripDayId}`
-                    : `edit:${activeCard.cardId}`;
-                setCardErrorFor(null);
+            <div hidden={cardPanel === "chat"}>
+            <cardFetcher.Form className="grid min-w-0 gap-4.5" method="post" encType="multipart/form-data"
+              onInvalidCapture={(event) => {
+                const field = event.target;
+                if (field instanceof HTMLElement && field.closest("#card-attachments-panel")) {
+                  event.preventDefault(); setCardPanel("attachments");
+                  requestAnimationFrame(() => field.focus());
+                }
               }}
-            >
-              <input
-                name="intent"
-                type="hidden"
-                value={activeCard.mode === "create" ? "add-card" : "update-card"}
-              />
-              {activeCard.mode === "create" ? (
-                <input
-                  name="tripDayId"
-                  type="hidden"
-                  value={activeCard.tripDayId}
-                />
-              ) : (
-                <input name="cardId" type="hidden" value={activeCard.cardId} />
-              )}
+              onSubmit={() => {
+                cardSubmissionKey.current = activeCard.mode === "create" ? `create:${activeCard.tripDayId}` : `edit:${activeCard.cardId}`;
+                setCardErrorFor(null);
+              }}>
+              <input name="intent" type="hidden" value={activeCard.mode === "create" ? "add-card" : "update-card"} />
+              {activeCard.mode === "create" ? <input name="tripDayId" type="hidden" value={activeCard.tripDayId} /> : <input name="cardId" type="hidden" value={activeCard.cardId} />}
+              <input type="hidden" name="type" value={cardDraft.type} />
+              {(activeCard.mode === "edit" || cardDraft.type === "location" && !locationDetailsOpen) && <input type="hidden" name="title" value={cardDraft.title} />}
 
-              <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">
-                Card type
-                <select className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" value={cardDraft.type} disabled={activeCard.mode === "edit"}
-                  onChange={(event) => setCardDraft((draft) => ({ ...draft, type: event.target.value as CardType }))}>
-                  {Object.entries(cardTypes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-                <input type="hidden" name="type" value={cardDraft.type} />
-              </label>
-
-              {cardDraft.type === "transport" && <>
-                <p className="text-xs text-muted-foreground">Times use {activeCardTimezone ?? "your device’s time zone (no trip or day time zone set)"}.</p>
-                <input type="hidden" name="transportUtcOffset" value={activeCardDate && (cardDraft.departureTime || cardDraft.arrivalTime)
-                  ? new Date(`${activeCardDate}T${cardDraft.departureTime || cardDraft.arrivalTime}:00`).getTimezoneOffset()
-                  : ""} />
-                <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">Mode of transport
-                  <select className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" name="transportMode" value={cardDraft.transportMode} onChange={(event) => setCardDraft((draft) => ({ ...draft, transportMode: event.target.value }))}>
-                    {Object.entries(transportModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              <div id="card-details-panel" role={activeCard.mode === "edit" ? "tabpanel" : undefined} aria-labelledby={activeCard.mode === "edit" ? "card-details-tab" : undefined} hidden={cardPanel !== "details"}>
+              <div className="grid min-w-0 gap-4.5">
+                {activeCard.mode === "edit" && <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${cardTypePillClasses[cardDraft.type]}`} aria-label="Card type">{cardTypes[cardDraft.type]}</span>}
+                {activeCard.mode === "create" && <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">Card type
+                  <select className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" value={cardDraft.type}
+                    onChange={(event) => { setCardDraft((draft) => ({ ...draft, type: event.target.value as CardType })); setCardPanel("details"); }}>
+                    {Object.entries(cardTypes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
-                </label>
-                {([ ["startLocation", "Start location"], ["endLocation", "End location"] ] as const).map(([field, label]) => (
-                  <TransportLocationPicker key={`${activeCardKey}:${field}`} tripId={trip.code ?? trip.id}
-                    name={field} label={label} value={cardDraft[field]} placeName={cardDraft[`${field}Name`]}
-                    onChange={(value, placeName) => setCardDraft((draft) => ({ ...draft, [field]: value, [`${field}Name`]: placeName }))}
-                    disabled={cardFetcher.state !== "idle"}
-                  />
-                ))}
-                <details>
-                  <summary className="text-secondary-foreground text-[12px] font-medium cursor-pointer">Times and service details</summary>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {([ ["departureTime", "departureTimezone", "Departure"], ["arrivalTime", "arrivalTimezone", "Arrival"] ] as const).map(([field, zoneField, label]) => (
-                      <div key={field} className="grid gap-3">
-                        <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">{label} time
-                          <input className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" name={field} type="time" value={cardDraft[field]} onChange={(event) => setCardDraft((draft) => ({ ...draft, [field]: event.target.value }))} />
-                        </label>
-                        <TimezoneField name={zoneField} label={`${label} time zone (optional)`}
-                          timezone={cardDraft[zoneField]} placeholder={activeCardTimezone ? `Default: ${activeCardTimezone}` : "Use device time zone"}
-                          onChange={(value) => setCardDraft((draft) => ({ ...draft, [zoneField]: value }))} disabled={cardFetcher.state !== "idle"} />
-                      </div>
-                    ))}
-                    <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">Service number
-                      <input className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" name="serviceNumber" value={cardDraft.serviceNumber} onChange={(event) => setCardDraft((draft) => ({ ...draft, serviceNumber: event.target.value }))} />
-                    </label>
-                  </div>
-                </details>
-                <p className="text-xs text-muted-foreground">Each time uses its own time zone override, or defaults to {activeCardTimezone ?? "your device’s time zone"}. Clear an override to use the default; entered clock times stay the same. Travel time is estimated when you save; departure takes priority when both times are entered.</p>
-                {activeSavedCard?.transportEstimate && (
-                  <div className="grid gap-1">
-                    <p className="text-secondary-foreground text-[12px] font-medium">Last saved travel-time estimate</p>
-                    <TransportEstimateSummary estimate={activeSavedCard.transportEstimate} />
-                  </div>
-                )}
-                {isMappableTransportMode(cardDraft.transportMode) && (
-                  <TransportRouteMap
-                    key={`route:${activeCardKey}`}
-                    apiKey={googleMapsBrowserApiKey}
-                    arrivalTime={cardDraft.arrivalTime}
-                    date={activeCardDate}
-                    timezone={transportTimezone(cardDraft, activeCardTimezone)}
-                    departureTime={cardDraft.departureTime}
-                    destination={cardDraft.endLocation}
-                    mode={cardDraft.transportMode}
-                    origin={cardDraft.startLocation}
-                  />
-                )}
-              </>}
+                </label>}
 
-              {(cardDraft.type === "location" || cardDraft.type === "hike") && <CardLocationPicker
-                key={activeCardKey} tripId={trip.code ?? trip.id} location={cardLocation}
-                onChange={setCardLocation} disabled={cardFetcher.state !== "idle"}
-                onPlaceSelected={(place) => {
-                  if (activeCard.mode !== "create" || cardDraft.type !== "location") return;
-                  setCardDraft((draft) => ({
-                    ...draft,
-                    title: !draft.title.trim() || draft.title === cardLocation.googlePlaceName ? place.name : draft.title,
-                    locationCategory: draft.locationCategory || placeLocationCategory(place),
-                  }));
-                }}
-              />}
+                {activeCard.mode === "create" && cardDraft.type === "location" && <>
+                  <CardLocationPicker key={`create-location:${activeCardKey}`} tripId={trip.code ?? trip.id} location={cardLocation} optional={false}
+                    disabled={cardFetcher.state !== "idle"} onChange={(location) => {
+                      setCardLocation(location);
+                      if (!location.googlePlaceId) setCardDraft((draft) => ({ ...draft, title: "", locationCategory: "" }));
+                    }} onPlaceSelected={(place) => setCardDraft((draft) => ({ ...draft, title: place.name, locationCategory: placeLocationCategory(place) }))} />
+                  <div className="min-w-0 rounded-md border border-border">
+                    <button type="button" className="flex min-h-9 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
+                      aria-expanded={locationDetailsOpen} aria-controls="location-card-fields" onClick={() => {
+                        setLocationDetailsOpen(!locationDetailsOpen);
+                      }}>
+                      <Icon name="chevron" className={`size-3.5 shrink-0 transition-transform ${locationDetailsOpen ? "rotate-90" : ""}`} />
+                      No Google maps location
+                    </button>
+                    {locationDetailsOpen && <div id="location-card-fields" className="grid min-w-0 gap-4 px-3 pb-3 pt-1">
+                      <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground" htmlFor="card-title">Title
+                        <input id="card-title" name="title" ref={titleInputRef} className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal"
+                          value={cardDraft.title} required onChange={(event) => setCardDraft((draft) => ({ ...draft, title: event.target.value }))} />
+                      </label>
+                      <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">Subcategory
+                        <select className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name="locationCategory" value={cardDraft.locationCategory}
+                          onChange={(event) => setCardDraft((draft) => ({ ...draft, locationCategory: event.target.value }))}>
+                          <option value="">No subcategory</option>
+                          {Object.entries(locationCategories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                      </label>
+                    </div>}
+                  </div>
+                </>}
 
-              {cardDraft.type !== "transport" && (
-              <div className="grid gap-1.5">
-                <label className="text-secondary-foreground text-[12px] font-medium" htmlFor="card-title">
+                {activeCard.mode === "create" && (cardDraft.type === "hike" || cardDraft.type === "city") && <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground" htmlFor="card-title">
                   {cardDraft.type === "city" ? "City / area / region name" : "Title"}
-                </label>
-                <input
-                  className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
-                  id="card-title"
-                  name="title"
-                  ref={titleInputRef}
-                  value={cardDraft.title}
-                  required
-                  onChange={(event) =>
-                    setCardDraft((draft) => ({
-                      ...draft,
-                      title: event.target.value,
-                    }))
-                  }
-                />
-              </div>
+                  <input id="card-title" name="title" ref={titleInputRef} className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal"
+                    value={cardDraft.title} required onChange={(event) => setCardDraft((draft) => ({ ...draft, title: event.target.value }))} />
+                </label>}
 
-              )}
-
-              {cardDraft.type === "location" && (
-                <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">
-                  Subcategory
-                  <select
-                    className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer"
-                    name="locationCategory"
-                    value={cardDraft.locationCategory}
-                    onChange={(event) => setCardDraft((draft) => ({ ...draft, locationCategory: event.target.value }))}
-                  >
+                {cardDraft.type === "location" && activeCard.mode === "edit" && <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">Subcategory
+                  <select className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name="locationCategory" value={cardDraft.locationCategory}
+                    onChange={(event) => setCardDraft((draft) => ({ ...draft, locationCategory: event.target.value }))}>
                     <option value="">No subcategory</option>
                     {Object.entries(locationCategories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
-                </label>
-              )}
+                </label>}
+                {activeCard.mode === "create" && cardDraft.type === "location" && !locationDetailsOpen && <input type="hidden" name="locationCategory" value={cardDraft.locationCategory} />}
 
-              {cardDraft.type === "hike" && (
-                <HikeGpxEditor key={`gpx:${activeCardKey}`} tripId={trip.code ?? trip.id} title={cardDraft.title}
-                  attachment={activeSavedCard?.attachments.find((item) => item.contentType === GPX_CONTENT_TYPE)}
-                  distanceKm={activeSavedCard?.hikeDistanceKm ?? null} elevationGainM={activeSavedCard?.hikeElevationGainM ?? null}
-                  disabled={cardFetcher.state !== "idle"} />
-              )}
+                {cardDraft.type === "transport" && <>
+                  <input type="hidden" name="transportUtcOffset" value={activeCardDate && (cardDraft.departureTime || cardDraft.arrivalTime)
+                    ? new Date(`${activeCardDate}T${cardDraft.departureTime || cardDraft.arrivalTime}:00`).getTimezoneOffset() : ""} />
+                  <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">Mode of transport
+                    <select className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name="transportMode" value={cardDraft.transportMode}
+                      onChange={(event) => setCardDraft((draft) => ({ ...draft, transportMode: event.target.value }))}>
+                      {Object.entries(transportModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                  <div className="grid min-w-0 items-start gap-4 [@media(min-width:_761px)]:grid-cols-2">
+                    {([ ["startLocation", "Start location", "departureTime", "departureTimezone", "Departure"], ["endLocation", "End location", "arrivalTime", "arrivalTimezone", "Arrival"] ] as const).map(([field, label, time, zone, timeLabel]) => <div key={field} className="grid min-w-0 gap-3">
+                      <TransportLocationPicker key={`${activeCardKey}:${field}`} tripId={trip.code ?? trip.id} name={field} label={label} value={cardDraft[field]} placeName={cardDraft[`${field}Name`]}
+                        disabled={cardFetcher.state !== "idle"} onChange={(value, placeName) => setCardDraft((draft) => ({ ...draft, [field]: value, [`${field}Name`]: placeName }))} />
+                      {activeCard.mode === "edit" && <>
+                        <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">{timeLabel} time
+                          <input className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name={time} type="time" value={cardDraft[time]}
+                            onChange={(event) => setCardDraft((draft) => ({ ...draft, [time]: event.target.value }))} />
+                        </label>
+                        <TimezoneField name={zone} label={`${timeLabel} time zone (optional)`} timezone={cardDraft[zone]}
+                          placeholder={activeCardTimezone ? `Default: ${activeCardTimezone}` : "Use device time zone"}
+                          onChange={(value) => setCardDraft((draft) => ({ ...draft, [zone]: value }))} disabled={cardFetcher.state !== "idle"} />
+                      </>}
+                    </div>)}
+                  </div>
+                  {activeCard.mode === "edit" && <>
+                    <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">Service number
+                      <input className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name="serviceNumber" value={cardDraft.serviceNumber}
+                        onChange={(event) => setCardDraft((draft) => ({ ...draft, serviceNumber: event.target.value }))} />
+                    </label>
+                    {activeSavedCard?.transportEstimate && <div className="grid gap-1">
+                      <p className="text-xs font-medium text-secondary-foreground">Last saved travel-time estimate</p>
+                      <TransportEstimateSummary estimate={activeSavedCard.transportEstimate} />
+                    </div>}
+                    {isMappableTransportMode(cardDraft.transportMode) && <TransportRouteMap key={`route:${activeCardKey}`} apiKey={googleMapsBrowserApiKey}
+                      arrivalTime={cardDraft.arrivalTime} departureTime={cardDraft.departureTime} date={activeCardDate} timezone={transportTimezone(cardDraft, activeCardTimezone)}
+                      destination={cardDraft.endLocation} origin={cardDraft.startLocation} mode={cardDraft.transportMode} />}
+                  </>}
+                </>}
 
-              {cardDraft.type === "city" && (
-                <>
-                  {activeSavedCard && activeSavedCard.cityLocations.length > 0 && (
-                    <CityLocationsMap
-                      apiKey={googleMapsBrowserApiKey}
-                      locations={activeSavedCard.cityLocations}
-                    />
-                  )}
-                  <CityLocationsEditor
-                    key={`city-locations:${activeCardKey}`}
-                    tripId={trip.code ?? trip.id}
-                    locations={activeSavedCard?.cityLocations ?? []}
-                    disabled={cardFetcher.state !== "idle"}
-                  />
-                </>
-              )}
+                {activeCard.mode === "create" && cardDraft.type === "hike" && <HikeGpxEditor key={`gpx:${activeCardKey}`} tripId={trip.code ?? trip.id} title={cardDraft.title}
+                  distanceKm={null} elevationGainM={null} disabled={cardFetcher.state !== "idle"} />}
 
-              {cardDraft.type !== "city" && <>
-              <div className="grid gap-1.5">
-                <label
-                  className="text-secondary-foreground text-[12px] font-medium"
-                  htmlFor="card-description"
-                >
-                  Description
-                </label>
-                <MarkdownEditor
-                  key={activeCardKey}
-                  id="card-description"
-                  name="description"
-                  value={cardDraft.description}
-                  disabled={cardFetcher.state !== "idle"}
-                  onChange={(description) =>
-                    setCardDraft((draft) => ({
-                      ...draft,
-                      description,
-                    }))
-                  }
-                />
+                {activeCard.mode === "edit" && cardDraft.type !== "city" && <div className="grid gap-1.5">
+                  <label className="text-xs font-medium text-secondary-foreground" htmlFor="card-description">Description</label>
+                  <MarkdownEditor key={activeCardKey} id="card-description" name="description" value={cardDraft.description}
+                    editWhenEmpty disabled={cardFetcher.state !== "idle"}
+                    onChange={(description) => setCardDraft((draft) => ({ ...draft, description }))} />
+                </div>}
+
+                {activeCard.mode === "edit" && cardDraft.type === "city" && <>
+                  {!!activeSavedCard?.cityLocations.length && <CityLocationsMap apiKey={googleMapsBrowserApiKey} locations={activeSavedCard.cityLocations} />}
+                  <CityLocationsEditor key={`city-locations:${activeCardKey}`} tripId={trip.code ?? trip.id} locations={activeSavedCard?.cityLocations ?? []} disabled={cardFetcher.state !== "idle"} />
+                </>}
+
+                {activeCard.mode === "edit" && (cardDraft.type === "location" || cardDraft.type === "hike") && <CardLocationPicker
+                  key={`location:${activeCardKey}`} tripId={trip.code ?? trip.id} location={cardLocation} onChange={setCardLocation} disabled={cardFetcher.state !== "idle"} />}
+              </div>
               </div>
 
-              <CardAttachments key={`attachments:${activeCardKey}`} tripId={trip.code ?? trip.id}
-                attachments={activeSavedCard?.attachments.filter((item) => item.contentType !== GPX_CONTENT_TYPE) ?? []}
-                coverAttachmentId={activeCard.mode === "edit" ? tripColumns.flatMap((column) => column.cards).find((card) => card.id === activeCard.cardId)?.coverAttachmentId ?? null : null}
-                allowCover={cardDraft.type === "location" || cardDraft.type === "transport"}
-                disabled={cardFetcher.state !== "idle"} />
-
-              </>}
+              {activeCard.mode === "edit" && cardDraft.type !== "city" && <div id="card-attachments-panel" role="tabpanel" aria-labelledby="card-attachments-tab" hidden={cardPanel !== "attachments"}>
+                <div className="grid min-w-0 gap-4.5">
+                  {cardDraft.type === "hike" && <HikeGpxEditor key={`gpx:${activeCardKey}`} tripId={trip.code ?? trip.id} title={cardDraft.title}
+                    attachment={activeSavedCard?.attachments.find((item) => item.contentType === GPX_CONTENT_TYPE)}
+                    distanceKm={activeSavedCard?.hikeDistanceKm ?? null} elevationGainM={activeSavedCard?.hikeElevationGainM ?? null} disabled={cardFetcher.state !== "idle"} />}
+                  <CardAttachments key={`attachments:${activeCardKey}`} tripId={trip.code ?? trip.id}
+                    attachments={activeSavedCard?.attachments.filter((item) => item.contentType !== GPX_CONTENT_TYPE) ?? []}
+                    coverAttachmentId={activeSavedCard?.coverAttachmentId ?? null} allowCover={cardDraft.type === "location" || cardDraft.type === "transport"} disabled={cardFetcher.state !== "idle"} />
+                </div>
+              </div>}
 
               {cardErrorFor === activeCardKey && cardFetcher.data?.error && (
                 <p className="text-sm font-medium text-destructive" role="alert">
@@ -1034,7 +1010,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                 </p>
               )}
 
-              <div className="flex flex-wrap [justify-content:end] gap-1.5 pt-4 border-t border-t-border">
+              <div className="flex flex-wrap [justify-content:end] gap-1.5 pt-4 border-t border-t-border [@media(max-width:_760px)]:sticky [@media(max-width:_760px)]:-bottom-5 [@media(max-width:_760px)]:-mx-5 [@media(max-width:_760px)]:bg-surface [@media(max-width:_760px)]:px-5 [@media(max-width:_760px)]:pb-[max(1rem,env(safe-area-inset-bottom))]">
                 {activeCard.mode === "edit" && (
                   <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-destructive text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-destructive disabled:opacity-[.45] disabled:cursor-not-allowed mr-auto"
                     disabled={cardFetcher.state !== "idle"} onClick={confirmDeleteCard}>
@@ -1052,7 +1028,8 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                   className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary"
                   type="submit"
                   disabled={
-                    (cardDraft.type === "transport" ? !cardDraft.startLocation.trim() || !cardDraft.endLocation.trim() : !cardDraft.title.trim()) || cardFetcher.state !== "idle"
+                    (cardDraft.type === "transport" ? !cardDraft.startLocation.trim() || !cardDraft.endLocation.trim() : !cardDraft.title.trim())
+                    || cardFetcher.state !== "idle"
                   }
                 >
                   {cardFetcher.state !== "idle"
@@ -1066,7 +1043,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
               </div>
             </cardFetcher.Form>
             </div>
-            {activeCard.mode === "edit" && activeSavedCard && <div hidden={cardPanel !== "chat"}>
+            {activeCard.mode === "edit" && activeSavedCard && <div id="card-chat-panel" role="tabpanel" aria-labelledby="card-chat-tab" hidden={cardPanel !== "chat"}>
               <CardChat key={activeCard.cardId} tripId={trip.code ?? trip.id} cardId={activeCard.cardId} type={activeSavedCard.type}
                 active={cardPanel === "chat"} date={activeCardDate} timezone={activeCardTimezone} />
             </div>}

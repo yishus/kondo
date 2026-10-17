@@ -1,35 +1,36 @@
-import { resolveTripId } from "./trip-url.server";
+import { tripIdentifierWhere } from "./trip-url.server";
 import { env } from "cloudflare:workers";
 import { createContext, type RouterContextProvider } from "react-router";
 
 import { requireUser } from "./auth.server";
 import { getDb } from "./db.server";
-import { loadTripBoard } from "./trip-data.server";
-import { asc, and, eq, exists } from "drizzle-orm";
-import { tripOwners } from "./db/schema";
+import { loadLiveTripHeader, loadTripBoard } from "./trip-data.server";
+import { asc, and } from "drizzle-orm";
+import { tripOwnerCondition } from "./trip-access.server";
 
 // The two matched loaders share a promise only for this request. A subsequent
 // navigation/revalidation checks the session and ownership again.
 const tripPageContext = createContext<Map<string, ReturnType<typeof loadPage>> | null>(null);
 const accommodationsPageContext = createContext<Map<string, ReturnType<typeof loadAccommodationsPage>> | null>(null);
 const notesPageContext = createContext<Map<string, ReturnType<typeof loadNotesPage>> | null>(null);
+const livePageContext = createContext<Map<string, ReturnType<typeof loadLivePage>> | null>(null);
 
 async function loadPage(request: Request, tripId: string) {
   const currentUser = await requireUser(request);
   const db = getDb(env.DB);
-  tripId = await resolveTripId(db, tripId);
   return { ...await loadTripBoard(db, tripId, currentUser.id), currentUser };
+}
+
+async function loadLivePage(request: Request, tripId: string) {
+  const currentUser = await requireUser(request);
+  return { ...await loadLiveTripHeader(getDb(env.DB), tripId, currentUser.id), currentUser };
 }
 
 async function loadAccommodationsPage(request: Request, tripId: string) {
   const currentUser = await requireUser(request);
   const db = getDb(env.DB);
-  tripId = await resolveTripId(db, tripId);
   const row = await db.query.trips.findFirst({
-    where: (trip) => and(eq(trip.id, tripId), exists(
-      db.select({ tripId: tripOwners.tripId }).from(tripOwners)
-        .where(and(eq(tripOwners.tripId, trip.id), eq(tripOwners.userId, currentUser.id))),
-    )),
+    where: (trip) => and(tripIdentifierWhere(tripId), tripOwnerCondition(db, trip.id, currentUser.id)),
     with: {
       owners: { columns: {}, with: { user: { columns: { id: true, name: true, email: true } } } },
       days: { columns: { tripDate: true }, orderBy: (day) => asc(day.tripDate) },
@@ -64,12 +65,8 @@ async function loadAccommodationsPage(request: Request, tripId: string) {
 async function loadNotesPage(request: Request, tripId: string) {
   const currentUser = await requireUser(request);
   const db = getDb(env.DB);
-  tripId = await resolveTripId(db, tripId);
   const row = await db.query.trips.findFirst({
-    where: (trip) => and(eq(trip.id, tripId), exists(
-      db.select({ tripId: tripOwners.tripId }).from(tripOwners)
-        .where(and(eq(tripOwners.tripId, trip.id), eq(tripOwners.userId, currentUser.id))),
-    )),
+    where: (trip) => and(tripIdentifierWhere(tripId), tripOwnerCondition(db, trip.id, currentUser.id)),
     with: {
       owners: { columns: {}, with: { user: { columns: { id: true, name: true, email: true } } } },
       days: { columns: { tripDate: true }, orderBy: (day) => asc(day.tripDate) },
@@ -101,6 +98,20 @@ export function getTripPage(context: Readonly<RouterContextProvider>, request: R
   let page = pages.get(tripId);
   if (!page) {
     page = loadPage(request, tripId);
+    pages.set(tripId, page);
+  }
+  return page;
+}
+
+export function getLiveTripPage(context: Readonly<RouterContextProvider>, request: Request, tripId: string) {
+  let pages = context.get(livePageContext);
+  if (!pages) {
+    pages = new Map();
+    context.set(livePageContext, pages);
+  }
+  let page = pages.get(tripId);
+  if (!page) {
+    page = loadLivePage(request, tripId);
     pages.set(tripId, page);
   }
   return page;

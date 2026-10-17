@@ -42,9 +42,10 @@ export function readTripSuggestion(value: unknown): Omit<TripCardSuggestion, "id
 
 /** Ordinary chat turns do not change the map, photos, or parent trip header. */
 export function shouldRevalidateTripChat(args: ShouldRevalidateFunctionArgs) {
-  const endpoint = `/trips/${encodeURIComponent(args.currentParams.tripId ?? "")}/chat`;
+  const base = `/trips/${encodeURIComponent(args.currentParams.tripId ?? "")}`;
+  const endpoint = args.formAction ? new URL(args.formAction, args.currentUrl).pathname : null;
   if (args.currentUrl.pathname === args.nextUrl.pathname && args.currentUrl.search === args.nextUrl.search
-    && args.formAction && new URL(args.formAction, args.currentUrl).pathname === endpoint
+    && (endpoint === `${base}/chat` || endpoint === `${base}/live/chat`)
     && args.actionResult) {
     return (args.actionResult as TripChatData).tripChanged === true;
   }

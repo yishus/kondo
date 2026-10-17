@@ -4,6 +4,7 @@ import { useRouteLoaderData } from "react-router";
 import type { Map as LeafletMap, CircleMarker, TileLayer } from "leaflet";
 import type { loader as rootLoader } from "../root";
 import type { HikeTrack } from "../hike-gpx";
+import type { loader as liveLoader } from "../routes/trip-live-layout";
 import type { loader as tripLoader } from "../routes/trip-layout";
 import { loadHikeTrack } from "../hike-track-cache";
 import { HikeElevationProfile } from "./hike-elevation-profile";
@@ -48,7 +49,9 @@ export function HikeMap(props: HikeMapProps) {
 
 function HikeMapView({ url, track, compact = false, fullscreen = false, title, onClose }: HikeMapProps & { fullscreen?: boolean; onClose?: () => void }) {
   const thunderforestApiKey = useRouteLoaderData<typeof rootLoader>("root")?.thunderforestApiKey ?? "";
-  const userId = useRouteLoaderData<typeof tripLoader>("routes/trip-layout")?.currentUser.id ?? "";
+  const plannerUser = useRouteLoaderData<typeof tripLoader>("routes/trip-layout")?.currentUser;
+  const liveUser = useRouteLoaderData<typeof liveLoader>("routes/trip-live-layout")?.currentUser;
+  const userId = plannerUser?.id ?? liveUser?.id ?? "";
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const fitRoute = useRef<() => void>(() => {});

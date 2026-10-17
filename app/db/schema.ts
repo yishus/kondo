@@ -116,6 +116,14 @@ export const trips = sqliteTable("trips", {
   timezone: text("timezone"),
 });
 
+// Card-order triggers advance the revision. A move claims a unique token only
+// for the revision it read, fencing every subsequent write in its atomic batch.
+export const tripCardOrder = sqliteTable("trip_card_order", {
+  tripId: text("trip_id").primaryKey().references(() => trips.id, { onDelete: "cascade" }),
+  revision: integer("revision").notNull().default(0),
+  moveToken: text("move_token"),
+});
+
 export const tripOwners = sqliteTable(
   "trip_owners",
   {
@@ -182,7 +190,7 @@ export const cards = sqliteTable(
     transportEstimate: text("transport_estimate", { mode: "json" }).$type<import("../transport-estimate").TransportEstimate>(),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
-    position: integer("position").notNull().default(0),
+    position: real("sort_position").notNull().default(1024),
     googlePlaceId: text("google_place_id"),
     googleMapsQuery: text("google_maps_query"),
     googlePlaceName: text("google_place_name"),
@@ -199,12 +207,12 @@ export const cards = sqliteTable(
   (table) => [
     check("cards_type_check", sql`${table.type} IN ('location', 'hike', 'city', 'transport')`),
     check("cards_title_check", sql`length(trim(${table.title})) > 0`),
-    check("cards_position_check", sql`${table.position} >= 0`),
+    check("cards_sort_position_check", sql`${table.position} >= 0 AND ${table.position} < 1e300`),
     check("cards_hike_distance_check", sql`${table.hikeDistanceKm} >= 0`),
     check("cards_hike_elevation_gain_check", sql`${table.hikeElevationGainM} >= 0`),
     check("cards_unscheduled_city_check", sql`${table.tripDayId} IS NOT NULL OR ${table.cityGroupId} IS NULL`),
-    index("cards_trip_day_position_idx").on(table.tripDayId, table.position),
-    index("cards_trip_position_idx").on(table.tripId, table.tripDayId, table.position),
+    index("cards_trip_day_sort_position_idx").on(table.tripDayId, table.position),
+    index("cards_trip_sort_position_idx").on(table.tripId, table.tripDayId, table.position),
   ],
 );
 
@@ -270,6 +278,42 @@ export const tripChats = sqliteTable("trip_chats", {
   lockId: text("lock_id"),
   lockedUntil: integer("locked_until").notNull().default(0),
 }, (table) => [primaryKey({ columns: [table.tripId, table.userId] }), index("trip_chats_user_idx").on(table.userId)]);
+
+export const tripLiveChats = sqliteTable("trip_live_chats", {
+  tripId: text("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  messages: text("messages", { mode: "json" }).$type<import("../trip-chat").TripChatMessage[]>().notNull().default([]),
+  lockId: text("lock_id"),
+  lockedUntil: integer("locked_until").notNull().default(0),
+}, (table) => [primaryKey({ columns: [table.tripId, table.userId] }), index("trip_live_chats_user_idx").on(table.userId)]);
+
+export const journalEntries = sqliteTable("journal_entries", {
+  id: text("id").primaryKey(),
+  tripId: text("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  visibility: text("visibility", { enum: ["private", "public"] }).notNull().default("private"),
+  createdAt: text("created_at").notNull(),
+  timezone: text("timezone").notNull(),
+}, (table) => [
+  index("journal_entries_trip_created_idx").on(table.tripId, table.createdAt),
+  check("journal_entries_visibility_check", sql`${table.visibility} IN ('private', 'public')`),
+  check("journal_entries_body_check", sql`length(${table.body}) <= 10000`),
+]);
+
+export const journalImages = sqliteTable("journal_images", {
+  id: text("id").primaryKey(),
+  entryId: text("entry_id").notNull().references(() => journalEntries.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  position: integer("position").notNull(),
+}, (table) => [
+  unique("journal_images_entry_position_unique").on(table.entryId, table.position),
+  check("journal_images_position_check", sql`${table.position} BETWEEN 0 AND 4`),
+  check("journal_images_size_check", sql`${table.size} > 0 AND ${table.size} <= 10485760`),
+  check("journal_images_type_check", sql`${table.contentType} IN ('image/jpeg', 'image/png', 'image/webp', 'image/gif')`),
+]);
 
 // Migration triggers invalidate this snapshot on every source-table mutation.
 export const tripChatContexts = sqliteTable("trip_chat_contexts", {
@@ -417,4 +461,11 @@ export const tripAttachmentRelations = relations(tripAttachments, ({ one }) => (
 }));
 export const tripTodoRelations = relations(tripTodos, ({ one }) => ({
   trip: one(trips, { fields: [tripTodos.tripId], references: [trips.id] }),
+}));
+export const journalEntryRelations = relations(journalEntries, ({ one, many }) => ({
+  author: one(user, { fields: [journalEntries.userId], references: [user.id] }),
+  images: many(journalImages),
+}));
+export const journalImageRelations = relations(journalImages, ({ one }) => ({
+  entry: one(journalEntries, { fields: [journalImages.entryId], references: [journalEntries.id] }),
 }));

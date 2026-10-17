@@ -1,10 +1,11 @@
 import {
-  DndContext, DragOverlay, KeyboardSensor, PointerSensor,
+  DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor,
   closestCenter, pointerWithin, useDraggable, useDroppable, useSensor, useSensors,
   type CollisionDetection, type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
 import { useId, useState, type ReactNode } from "react";
 
+import { googleTransportDirectionsUrl } from "../transport-route";
 import { googleMapsUrl } from "../card-location";
 import type { CardDestination, CardMove, TripCard } from "../card-order";
 import { cardTypes, locationCategories, transportModes } from "../card-types";
@@ -36,7 +37,7 @@ export const cardKeyboardCoordinates: KeyboardCoordinateGetter = (event, { conte
   const candidates = context.droppableContainers.getEnabled().flatMap((container) => {
     if (!container.data.current?.destination) return [];
     const rect = context.droppableRects.get(container.id);
-    if (!rect || container.id === context.over?.id) return [];
+    if (!rect || !rect.width || !rect.height || container.id === context.over?.id) return [];
     const dx = rect.left + rect.width / 2 - x;
     const dy = rect.top + rect.height / 2 - y;
     const day = container.data.current?.destination.tripDayId;
@@ -61,7 +62,9 @@ export function CardDragBoard({ children, onMove }: {
   const id = useId();
   const [draggedCard, setDraggedCard] = useState<TripCard | null>(null);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    // Let a swipe scroll normally; only a deliberate hold picks up a card.
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: cardKeyboardCoordinates }),
   );
 
@@ -122,10 +125,11 @@ export function CardDropSlot({ destination, label, disabled, children }: {
   );
 }
 
-export function DraggableCard({ card, disabled, onOpen }: {
+export function DraggableCard({ card, disabled, onOpen, onRequestMove }: {
   card: TripCard;
   disabled: boolean;
   onOpen: () => void;
+  onRequestMove?: (card: TripCard) => void;
 }) {
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, isDragging } = useDraggable({
     id: card.id, data: { card }, disabled,
@@ -137,13 +141,13 @@ export function DraggableCard({ card, disabled, onOpen }: {
       <button
         ref={setActivatorNodeRef}
         type="button"
-        className="grid w-8 shrink-0 cursor-grab touch-none place-items-center rounded-l-[9px] text-muted-foreground hover:bg-muted hover:text-secondary-foreground active:cursor-grabbing disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="grid w-8 shrink-0 cursor-grab touch-manipulation select-none place-items-center rounded-l-[9px] text-muted-foreground hover:bg-muted hover:text-secondary-foreground active:cursor-grabbing disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [@media(max-width:_760px)]:w-11"
         {...attributes}
         {...listeners}
         disabled={disabled}
         data-card-handle={card.id}
         aria-label={`Move ${card.title}`}
-        title="Drag to move. Or press Space, then use arrow keys."
+        title="Drag to move; hold first on touch. Or press Space, then use arrow keys."
       >
         <svg aria-hidden="true" width="16" height="20" viewBox="0 0 16 20" fill="currentColor">
           {[5, 10, 15].map((y) => <g key={y}><circle cx="5" cy={y} r="1.4" /><circle cx="11" cy={y} r="1.4" /></g>)}
@@ -151,15 +155,16 @@ export function DraggableCard({ card, disabled, onOpen }: {
       </button>
       <div className="flex min-w-0 flex-1 flex-col">
         <CardCover card={card} />
-        <span className="flex items-center gap-1.25 mt-3 text-muted-foreground text-[10px] font-normal data-[card-label='hike']:text-[light-dark(#15803d,#86efac)] data-[card-label='food']:text-[light-dark(#c2410c,#fdba74)] data-[card-label='place\_of\_interest']:text-[light-dark(#7e22ce,#d8b4fe)] data-[card-label='location']:text-[light-dark(#0f766e,#5eead4)] data-[card-label='city']:text-[light-dark(#0e7490,#67e8f9)] data-[card-label='transport']:text-[light-dark(#1d4ed8,#93c5fd)]" data-card-label={card.type === "location" ? card.locationCategory ?? "location" : card.type}>
+        <span className="relative flex items-center gap-1.25 mt-3 [@media(max-width:_760px)]:pr-11 text-muted-foreground text-[10px] font-normal data-[card-label='hike']:text-[light-dark(#15803d,#86efac)] data-[card-label='food']:text-[light-dark(#c2410c,#fdba74)] data-[card-label='place\_of\_interest']:text-[light-dark(#7e22ce,#d8b4fe)] data-[card-label='location']:text-[light-dark(#0f766e,#5eead4)] data-[card-label='city']:text-[light-dark(#0e7490,#67e8f9)] data-[card-label='transport']:text-[light-dark(#1d4ed8,#93c5fd)]" data-card-label={card.type === "location" ? card.locationCategory ?? "location" : card.type}>
           <Icon name={card.type === "transport" ? "route" : card.type === "city" ? "compass" : "pin"} width="11" height="11" />
           {card.type === "transport"
             ? transportModes[card.transportMode as keyof typeof transportModes] ?? "Transport"
             : card.type === "location" && card.locationCategory
               ? `${cardTypes.location} · ${locationCategories[card.locationCategory]}`
               : cardTypes[card.type]}
+          {onRequestMove && <button type="button" className="absolute right-0 top-1/2 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-muted disabled:opacity-40 [@media(max-width:_760px)]:grid" aria-label={`Move card: ${card.title}`} data-card-move={card.id} disabled={disabled} onClick={() => onRequestMove(card)}><Icon name="more" width="18" height="18" /></button>}
         </span>
-        <button type="button" className={`font-medium text-[13px] min-w-0 flex-1 cursor-pointer rounded-r-[9px] pt-1 pr-3 text-left wrap-anywhere disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${card.type === "city" ? "pb-1" : "pb-3"}`} aria-haspopup="dialog" onClick={onOpen} disabled={disabled}>
+        <button type="button" className={`font-medium text-[13px] min-w-0 flex-1 cursor-pointer rounded-r-[9px] pt-1 pr-3 [@media(max-width:_760px)]:pr-11 text-left wrap-anywhere disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${card.type === "city" ? "pb-1" : "pb-3"}`} aria-haspopup="dialog" onClick={onOpen} disabled={disabled}>
           {card.title}
         </button>
         {card.type === "city" && (
@@ -172,6 +177,12 @@ export function DraggableCard({ card, disabled, onOpen }: {
         )}
         {card.type === "transport" && card.transportEstimate && (
           <div className="mb-2 pr-3"><TransportEstimateSummary estimate={card.transportEstimate} /></div>
+        )}
+        {card.type === "transport" && (card.startLocation || card.startLocationName)?.trim() && (card.endLocation || card.endLocationName)?.trim() && (
+          <a href={googleTransportDirectionsUrl((card.startLocation || card.startLocationName)!.trim(), (card.endLocation || card.endLocationName)!.trim(), card.transportMode || "")}
+            target="_blank" rel="noopener noreferrer" className="mb-3 mr-3 w-fit rounded text-xs font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            Open route in Google Maps <span aria-hidden="true">↗</span>
+          </a>
         )}
         {card.type === "hike" && <>
           {gpx && <div className="mb-2 mr-3"><HikePreview key={gpx.id} tripId={card.tripCode ?? card.tripId} cardId={card.id} attachmentId={gpx.id} title={card.title} onOpen={onOpen} /></div>}

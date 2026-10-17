@@ -1,9 +1,9 @@
-import { resolveTripId } from "../trip-url.server";
+import { accessibleTripCondition } from "../trip-access.server";
 import { env } from "cloudflare:workers";
 import { and, eq, isNull } from "drizzle-orm";
 
 import type { Route } from "./+types/place-photo";
-import { requireTripOwner } from "../auth.server";
+import { requireUser } from "../auth.server";
 import { getDb } from "../db.server";
 import { cards } from "../db/schema";
 import { getPlacePhoto } from "../place-photo.server";
@@ -18,9 +18,8 @@ export async function action({ params, request }: Route.ActionArgs) {
   if (request.method !== "POST") return reply(null, "Method not allowed.", 405);
   if (request.headers.get("Origin") !== new URL(request.url).origin) return reply(null, "Please refresh photos from this app.", 403);
   const db = getDb(env.DB);
-  const tripId = await resolveTripId(db, params.tripId);
-  await requireTripOwner(request, db, tripId);
-  const scope = and(eq(cards.id, params.cardId), eq(cards.tripId, tripId));
+  const user = await requireUser(request);
+  const scope = and(eq(cards.id, params.cardId), accessibleTripCondition(db, params.tripId, user.id, cards.tripId));
   const [card] = await db.select().from(cards).where(scope).limit(1);
   if (!card || card.type !== "location" || !card.googlePlaceId) {
     return reply(null, "That location card no longer exists.", 404);

@@ -46,7 +46,7 @@ export function CardAttachments({ tripId, attachments, coverAttachmentId, allowC
   }
 
   return (
-    <fieldset className="grid min-w-0 gap-3 pt-4.5 border-t border-t-border [&_>_legend]:float-left [&_>_legend]:w-full [&_>_legend]:mb-0 [&_>_legend_+_*]:clear-both" disabled={disabled}>
+    <fieldset className="grid min-w-0 gap-3 pt-4.5 border-t border-t-border first:border-t-0 [&_>_legend]:float-left [&_>_legend]:w-full [&_>_legend]:mb-0 [&_>_legend_+_*]:clear-both" disabled={disabled}>
       <legend className="text-secondary-foreground text-[12px] font-medium">Attachments <span className="font-normal text-muted-foreground">(optional)</span></legend>
       {attachments.length > 0 && (
         <ul className="grid gap-2" aria-label="Saved attachments">

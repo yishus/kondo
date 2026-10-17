@@ -15,7 +15,7 @@ export function HikeGpxEditor({ tripId, title, attachment, disabled, distanceKm,
   const request = useRef(0);
   const url = attachment ? attachmentUrl(tripId, attachment.cardId, attachment.id) : undefined;
 
-  return <fieldset className="grid min-w-0 gap-3 pt-4.5 border-t border-t-border [&_>_legend]:float-left [&_>_legend]:w-full [&_>_legend]:mb-0 [&_>_legend_+_*]:clear-both" disabled={disabled}>
+  return <fieldset className="grid min-w-0 gap-3 pt-4.5 border-t border-t-border first:border-t-0 [&_>_legend]:float-left [&_>_legend]:w-full [&_>_legend]:mb-0 [&_>_legend_+_*]:clear-both" disabled={disabled}>
     <legend className="text-secondary-foreground text-[12px] font-medium">Hike route</legend>
     {attachment && <div className="flex items-center justify-between gap-3 text-sm">
       <a href={`${url}?download=1`} className={`break-all text-primary hover:underline ${removed ? "line-through" : ""}`}>{attachment.filename}</a>

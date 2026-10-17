@@ -5,6 +5,8 @@ import { TripPage } from "./trip";
 export { loader, action } from "./trip";
 export { shouldRevalidateTripChat as shouldRevalidate } from "../trip-chat";
 
+export function meta() { return [{ title: "Map · Kondo" }]; }
+
 export default function TripMapPage({ loaderData }: Route.ComponentProps) {
   return <TripPage loaderData={loaderData} view="map" />;
 }

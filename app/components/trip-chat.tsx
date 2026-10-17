@@ -1,7 +1,7 @@
 import { MarkdownContent } from "./markdown-content";
 import { ChatProgress, ChatToolActivity, useChatStream } from "./chat-progress";
 import { useEffect, useRef, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useRevalidator } from "react-router";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { citedMarkdown, MAX_CHAT_MESSAGES, MAX_CHAT_MESSAGE_LENGTH, safeChatUrl } from "../card-chat";
@@ -13,12 +13,13 @@ import { GoogleMapsPlacePicker } from "./google-maps-place-picker";
 
 const prompts = ["Suggest a few places that fit my itinerary.", "Find food stops near my planned visits.", "What is missing from this trip?"];
 
-export function TripChat({ tripId, columns, onOpenCard }: {
-  tripId: string; columns: TripColumn[]; onOpenCard: (card: TripCard) => void;
+export function TripChat({ tripId, columns, onOpenCard, live = false }: {
+  tripId: string; columns: TripColumn[]; onOpenCard?: (card: TripCard) => void; live?: boolean;
 }) {
   const fetcher = useFetcher<TripChatData>();
+  const revalidator = useRevalidator();
   const { load } = fetcher;
-  const endpoint = `/trips/${encodeURIComponent(tripId)}/chat`;
+  const endpoint = `/trips/${encodeURIComponent(tripId)}/${live ? "live/" : ""}chat`;
   const stream = useChatStream(endpoint);
   const initialized = useRef(false);
   const handled = useRef<string | undefined>(undefined);
@@ -58,32 +59,33 @@ export function TripChat({ tripId, columns, onOpenCard }: {
     if (busy || !available || !loaded || full || !message.trim()) return;
     setDraft(message);
     setRequestError(undefined);
-    void stream.send(message).then((data) => {
+    void stream.send(message, live ? { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } : {}).then((data) => {
       if (data?.messages) { setMessages(data.messages); setDraft(""); }
       if (data?.available !== undefined) setAvailable(data.available);
+      if (data?.tripChanged) void revalidator.revalidate();
     });
   }
 
   return (
-    <section className="text-[13px] min-w-0 rounded-xl border border-border bg-surface p-4 xl:sticky xl:top-4" aria-label="Chat about this trip">
+    <section className={`text-[13px] min-w-0 rounded-xl border border-border bg-surface p-4 ${live ? "mx-auto w-full max-w-3xl md:p-5" : "xl:sticky xl:top-4"}`} aria-label="Chat about this trip">
       <div className="flex justify-between items-center gap-3 [&_h3]:font-semibold [&_p]:text-muted-foreground [&_p]:text-[11px] [&_p]:leading-[1.6]">
         <div>
-          <h3>Ask about this trip</h3>
+          <h3>{live ? "Your travel companion" : "Ask about this trip"}</h3>
           <p>Sol · Web search available</p>
         </div>
-        {messages.length > 0 && <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" disabled={busy} onClick={() => {
+        {messages.length > 0 && <button type="button" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" disabled={busy} onClick={() => {
           if (window.confirm("Clear your conversation about this trip and start a new chat?")) {
             void fetcher.submit({ intent: "clear" }, { method: "post", action: endpoint });
           }
         }}>New chat</button>}
       </div>
-      <p className="text-muted-foreground text-[11px] leading-[1.6] mt-2.5">Plan with your whole itinerary, stays, notes, and todos. Ask for ideas, then add the cards you like.</p>
-      <div className="min-h-45 max-h-[min(48dvh,520px)] overflow-y-auto overscroll-contain m-[16px_0] pr-1" ref={log} role="log" aria-label="Conversation" aria-live="polite" aria-busy={busy}>
+      <p className="text-muted-foreground text-[11px] leading-[1.6] mt-2.5">{live ? "Ask about today, your current stop, or what’s coming up. The local time and saved itinerary are refreshed with each question." : "Plan with your whole itinerary, stays, notes, and todos. Ask for ideas, or ask Sol to plan and add the cards for you."}</p>
+      <div className={`min-h-45 max-h-[min(48dvh,520px)] overflow-y-auto overscroll-contain m-[16px_0] pr-1 ${live ? "md:min-h-64" : ""}`} ref={log} role="log" aria-label="Conversation" aria-live="polite" aria-busy={busy}>
         {!loaded && !error && <p className="text-muted-foreground">Loading your chat…</p>}
         {loaded && !messages.length && <div className="p-[20px_0] leading-[1.7]">
-          <p>Where would you like to go next?</p>
-          <p className="text-muted-foreground">Find places, fill a free day, or build on what you already have planned.</p>
-          {available && <div className="flex flex-wrap gap-2 mt-4 [&_button]:text-left [&_button]:shrink">{prompts.map((prompt) => <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface" key={prompt} disabled={busy} onClick={() => send(prompt)}>{prompt}</button>)}</div>}
+          <p>{live ? "How can I help right now?" : "Where would you like to go next?"}</p>
+          <p className="text-muted-foreground">{live ? "Get practical help for the day ahead, wherever you are." : "Find places, fill a free day, or build on what you already have planned."}</p>
+          {available && <div className="flex flex-wrap gap-2 mt-4 [&_button]:text-left [&_button]:shrink">{(live ? ["What’s next on my itinerary?", "What should I know about my current stop?", "Find food near today’s stops."] : prompts).map((prompt) => <button type="button" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface" key={prompt} disabled={busy} onClick={() => send(prompt)}>{prompt}</button>)}</div>}
         </div>}
         {messages.map((message) => <article className={`p-3.5 mb-3 rounded-lg wrap-anywhere ${message.role === "user" ? "ml-6 bg-muted" : "border border-border"}`} key={message.id}>
           <p className="mb-2 text-muted-foreground text-[11px] font-semibold">{message.role === "user" ? "You" : "Sol"}</p>
@@ -98,12 +100,16 @@ export function TripChat({ tripId, columns, onOpenCard }: {
             {message.citations.length > 0 && <div className="flex flex-wrap gap-[8px_12px] mt-4 pt-2.5 border-t border-t-border text-[11px] [&_a]:text-muted-foreground [&_a]:underline [&_a]:underline-offset-[3px]" aria-label="Sources">
               {[...new Map(message.citations.filter((citation) => safeChatUrl(citation.url)).map((citation) => [citation.url, citation])).values()].map((citation) => <a key={citation.url} href={citation.url} target="_blank" rel="noopener noreferrer">{citation.title} ↗</a>)}
             </div>}
-            {message.suggestions?.map((suggestion) => <SuggestedCard key={suggestion.id} suggestion={suggestion} tripId={tripId} columns={columns} busy={busy}
+            {!live && onOpenCard && !!message.suggestions?.length && <div className="@container mt-4">
+              <div className="mx-auto grid max-w-80 grid-cols-1 items-start gap-4 @min-[41rem]:max-w-[41rem] @min-[41rem]:grid-cols-2 @min-[62rem]:max-w-[62rem] @min-[62rem]:grid-cols-3">
+              {message.suggestions.map((suggestion) => <SuggestedCard key={suggestion.id} suggestion={suggestion} tripId={tripId} columns={columns} busy={busy}
               onOpenCard={onOpenCard} onAdd={(tripDayId, location) => {
                 void fetcher.submit({ intent: "add", messageId: message.id, suggestionId: suggestion.id, tripDayId,
                   googlePlaceId: location.googlePlaceId ?? "", googleMapsQuery: location.googleMapsQuery ?? "", googlePlaceName: location.googlePlaceName ?? "",
                 }, { method: "post", action: endpoint });
               }} />)}
+              </div>
+            </div>}
           </>}
         </article>)}
         <ChatProgress stream={stream} />
@@ -111,21 +117,21 @@ export function TripChat({ tripId, columns, onOpenCard }: {
       {available === false && <p className="m-[12px_0] p-3 border border-border rounded-md text-muted-foreground">Chat is not configured yet. Ask the trip administrator to enable it.</p>}
       {!busy && error && <div className="m-[12px_0] p-3 border border-border rounded-md text-muted-foreground" role="alert">
         <p>{error}</p>
-        <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" onClick={() => void load(endpoint)}>Reload chat</button>
+        <button type="button" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" onClick={() => void load(endpoint)}>Reload chat</button>
       </div>}
       {full && <p className="m-[12px_0] p-3 border border-border rounded-md text-muted-foreground">This conversation is full. Start a new chat to continue.</p>}
       <form className="[&_textarea]:resize-y [&_textarea]:max-h-50" onSubmit={(event) => { event.preventDefault(); send(draft); }}>
         <label className="sr-only" htmlFor={`trip-chat-message-${tripId}`}>Message about this trip</label>
         <textarea id={`trip-chat-message-${tripId}`} className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" rows={3} value={draft}
           maxLength={MAX_CHAT_MESSAGE_LENGTH} disabled={busy || !available || !loaded || full}
-          placeholder="Find a few places to add to my trip…"
+          placeholder={live ? "Ask about your day…" : "Plan a 6-day trip in Japan and add the cards…"}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(draft); }
           }} />
         <div className="flex items-center justify-between gap-4 mt-2 [&_p]:max-w-97.5 [&_p]:text-[11px] [&_p]:text-muted-foreground [&_p]:leading-normal">
           <p>Your chat is private to you. Saved trip details and messages are sent to OpenAI when you ask.</p>
-          <button className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary" type="submit" disabled={busy || !available || !loaded || full || !draft.trim()}>{busy ? "Working…" : "Send"}</button>
+          <button className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary" type="submit" disabled={busy || !available || !loaded || full || !draft.trim()}>{busy ? "Working…" : "Send"}</button>
         </div>
       </form>
     </section>
@@ -141,7 +147,7 @@ function SuggestedCard({ suggestion, tripId, columns, busy, onAdd, onOpenCard }:
   const selectedDay = columns.some((column) => column.id === dayId) ? dayId : UNSCHEDULED_COLUMN_ID;
   const addedCard = columns.flatMap((column) => column.cards).find((card) => card.id === suggestion.addedCardId);
   const showLocation = suggestion.type === "location" || suggestion.type === "hike";
-  return <section className="mt-4 grid min-w-0 gap-3 rounded-lg border border-border p-3" aria-label={`Suggested card: ${suggestion.title}`}>
+  return <section className="mx-auto grid w-full min-w-0 max-w-80 gap-3 rounded-lg border border-border p-3" aria-label={`Suggested card: ${suggestion.title}`}>
     <div>
       <p className="text-xs text-muted-foreground">{cardTypes[suggestion.type]}</p>
       <h4 className="mt-1 font-semibold">{suggestion.title}</h4>
@@ -151,6 +157,7 @@ function SuggestedCard({ suggestion, tripId, columns, busy, onAdd, onOpenCard }:
     {suggestion.addedCardId ? <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs text-muted-foreground" role="status">Added to trip</span>
       {addedCard && <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed border-border bg-surface" onClick={() => onOpenCard(addedCard)}>Open card</button>}
+      {showLocation && addedCard && !addedCard.googlePlaceId && <p className="w-full text-xs text-muted-foreground">Set a map location to show this card as a pin.</p>}
     </div> : <>
       <label className="grid min-w-0 gap-1.5 text-secondary-foreground text-[12px] font-medium">Add to
         <select className="w-full min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer" value={selectedDay} disabled={busy} onChange={(event) => setDayId(event.target.value)}>

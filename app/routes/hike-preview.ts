@@ -1,8 +1,8 @@
-import { resolveTripId } from "../trip-url.server";
+import { accessibleTripCondition } from "../trip-access.server";
 import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import type { Route } from "./+types/hike-preview";
-import { requireTripOwner } from "../auth.server";
+import { requireUser } from "../auth.server";
 import { getDb } from "../db.server";
 import { cardAttachments, cards } from "../db/schema";
 import { attachmentKey, hikePreviewKey, PRIVATE_ATTACHMENT_CACHE } from "../attachment-storage";
@@ -14,9 +14,8 @@ const pending = new Map<string, Promise<void>>();
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const db = getDb(env.DB);
-  const tripId = await resolveTripId(db, params.tripId);
-  await requireTripOwner(request, db, tripId);
-  const scope = and(eq(cards.tripId, tripId), eq(cards.id, params.cardId),
+  const currentUser = await requireUser(request);
+  const scope = and(accessibleTripCondition(db, params.tripId, currentUser.id, cards.tripId), eq(cards.id, params.cardId),
     eq(cardAttachments.id, params.attachmentId), eq(cardAttachments.contentType, GPX_CONTENT_TYPE));
   const findAttachment = () => db.select({ id: cardAttachments.id }).from(cardAttachments)
     .innerJoin(cards, eq(cards.id, cardAttachments.cardId)).where(scope).get();

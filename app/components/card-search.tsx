@@ -26,7 +26,7 @@ export function CardSearch({ tripId, columns, onOpenCard }: {
     return saved ? [{ ...result, ...saved }] : [];
   }) ?? [];
 
-  return <section aria-label="Card search" className="mb-4">
+  return <section aria-label="Card search" className="mb-4 [@media(max-width:_760px)]:hidden">
     <div className="flex items-center gap-2">
       <label htmlFor={id} className="sr-only">Search cards</label>
       <input id={id} type="search" className="min-w-0 min-h-9 py-2 px-2.5 border border-border rounded-md bg-surface text-foreground text-[13px] font-normal leading-[1.45] [outline:none] transition-[border-color] duration-150 [&:hover:not(:disabled)]:border-input focus-visible:border-primary focus-visible:[outline:1px_solid_var(--primary)] focus-visible:outline-offset-0 aria-invalid:border-destructive disabled:opacity-[.5] disabled:cursor-not-allowed [[type='file']]:p-1.5 [[type='file']]:text-muted-foreground [[type='file']]:text-[12px] file:mr-2.5 file:py-0.75 file:px-1.75 file:border-0 file:rounded-[3px] file:bg-muted file:text-foreground file:[font:inherit] file:cursor-pointer w-full sm:max-w-md" value={text} maxLength={MAX_CARD_SEARCH_LENGTH}
@@ -34,7 +34,7 @@ export function CardSearch({ tripId, columns, onOpenCard }: {
         onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setText(""); }} />
       {text && <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" onClick={() => { setText(""); document.getElementById(id)?.focus(); }}>Clear search</button>}
     </div>
-    <p id={`${id}-hint`} className="mt-1.5 text-xs text-muted-foreground">Search titles, descriptions, places, and transport endpoints across all days.</p>
+    <p id={`${id}-hint`} className="mt-1.5 text-xs text-muted-foreground [@media(max-width:_760px)]:sr-only">Search titles, descriptions, places, and transport endpoints across all days.</p>
     <div id={`${id}-results`} aria-busy={busy}>
       {query && <div className="mt-3 rounded-lg border border-border bg-surface p-3">
         <p role="status" className="text-xs text-muted-foreground">

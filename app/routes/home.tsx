@@ -84,7 +84,9 @@ export function meta() {
 
 export default function Home({ actionData, loaderData }: Route.ComponentProps) {
   const navigation = useNavigation();
-  const busy = navigation.state !== "idle";
+  const creatingTrip = navigation.state !== "idle"
+    && navigation.formMethod === "POST"
+    && navigation.formData?.get("intent") === "create-trip";
   const tripsByPeriod: Record<TripPeriod, (typeof loaderData.trips)[number][]> = {
     current: [],
     upcoming: [],
@@ -113,6 +115,7 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
           className="mb-8 pb-6.5 border-b border-b-border"
           method="post"
         >
+          <input type="hidden" name="intent" value="create-trip" />
           <label className="block mb-2.5 text-secondary-foreground text-[12px] font-medium" htmlFor="trip-title">
             Add a new trip
           </label>
@@ -127,14 +130,14 @@ export default function Home({ actionData, loaderData }: Route.ComponentProps) {
               aria-describedby={actionData?.error ? "trip-title-error" : undefined}
               aria-invalid={Boolean(actionData?.error)}
               required
-              disabled={busy}
+              disabled={creatingTrip}
             />
             <button
               className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary"
               type="submit"
-              disabled={busy}
+              disabled={creatingTrip}
             >
-              {busy ? "Creating…" : "Add trip"}
+              {creatingTrip ? "Creating…" : "Add trip"}
             </button>
           </div>
           {actionData?.error && (

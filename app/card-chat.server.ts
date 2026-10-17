@@ -102,6 +102,7 @@ export type ApiResponse = {
   output?: {
     type: string;
     id?: string;
+    call_id?: string;
     status?: string;
     action?: { type?: string; queries?: string[]; query?: string; url?: string };
     name?: string;
@@ -149,9 +150,13 @@ export async function generateCardChatReply({ apiKey, context, messages, signal,
   }));
 }
 
-export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now = new Date(), onEvent, instructions, tools, input }: {
+export type ChatInputItem = { role: string; content: string }
+  | NonNullable<ApiResponse["output"]>[number]
+  | { type: "function_call_output"; call_id: string; output: string };
+
+export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now = new Date(), onEvent, instructions, tools, input, maxOutputTokens = 6000 }: {
   apiKey: string; signal?: AbortSignal; onEvent?: (event: ChatProgress) => void; fetcher?: typeof fetch; now?: Date;
-  instructions: string; tools: unknown[]; input: { role: string; content: string }[];
+  instructions: string; tools: unknown[]; input: ChatInputItem[]; maxOutputTokens?: number;
 }): Promise<ApiResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90_000);
@@ -171,7 +176,8 @@ export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now
         tools,
         tool_choice: "auto",
         reasoning: { effort: "medium" },
-        max_output_tokens: 6000,
+        include: ["reasoning.encrypted_content"],
+        max_output_tokens: maxOutputTokens,
         input,
       }),
     });
@@ -196,8 +202,8 @@ export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now
         const item = event.item;
         if (item?.id && (item.type === "web_search_call" || item.type === "function_call")) {
           const action = item.action;
-          const tool: ChatToolCall = { id: item.id, name: item.type === "web_search_call" ? "Web search" : item.name === "suggest_cards" ? "Suggest cards" : "Tool call",
-            status: event.type.endsWith(".done") ? "completed" : "running",
+          const tool: ChatToolCall = { id: item.id, name: item.type === "web_search_call" ? "Web search" : item.name === "suggest_cards" ? "Suggest cards" : item.name === "add_itinerary_cards" ? "Add itinerary cards" : "Tool call",
+            status: event.type.endsWith(".done") && item.name !== "add_itinerary_cards" ? "completed" : "running",
             detail: (action?.queries?.join(" · ") || action?.query || action?.url)?.slice(0, 500) };
           toolCalls.set(tool.id, tool);
           onEvent({ type: "tool", tool });

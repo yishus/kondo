@@ -1,20 +1,19 @@
-import { resolveTripId } from "../trip-url.server";
+import { accessibleTripCondition } from "../trip-access.server";
 import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import type { Route } from "./+types/accommodation-document";
-import { requireTripOwner } from "../auth.server";
+import { requireUser } from "../auth.server";
 import { getDb } from "../db.server";
 import { accommodationDocuments, accommodationPlaces, accommodations } from "../db/schema";
 import { documentKey } from "../accommodations.server";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const db = getDb(env.DB);
-  const tripId = await resolveTripId(db, params.tripId);
-  await requireTripOwner(request, db, tripId);
+  const currentUser = await requireUser(request);
   const [row] = await db.select({ document: accommodationDocuments }).from(accommodationDocuments)
     .innerJoin(accommodations, eq(accommodations.id, accommodationDocuments.accommodationId))
     .innerJoin(accommodationPlaces, eq(accommodationPlaces.id, accommodations.placeId))
-    .where(and(eq(accommodationPlaces.tripId, tripId), eq(accommodations.id, params.accommodationId), eq(accommodationDocuments.id, params.documentId))).limit(1);
+    .where(and(accessibleTripCondition(db, params.tripId, currentUser.id, accommodationPlaces.tripId), eq(accommodations.id, params.accommodationId), eq(accommodationDocuments.id, params.documentId))).limit(1);
   if (!row) throw new Response("Document not found", { status: 404 });
   const file = row.document;
   const object = await env.ATTACHMENTS.get(documentKey(file.accommodationId, file.id));

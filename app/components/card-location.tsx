@@ -1,18 +1,19 @@
 import type { CardLocation, PlaceSearchResult } from "../card-location";
 import { GoogleMapsPlacePicker } from "./google-maps-place-picker";
 
-export function CardLocationPicker({ tripId, location, onChange, onPlaceSelected, disabled }: {
+export function CardLocationPicker({ tripId, location, onChange, onPlaceSelected, disabled, optional = true }: {
   tripId: string;
   location: CardLocation;
   onChange: (location: CardLocation) => void;
   onPlaceSelected?: (place: PlaceSearchResult) => void;
   disabled: boolean;
+  optional?: boolean;
 }) {
   return <>
     <input type="hidden" name="googlePlaceId" value={location.googlePlaceId ?? ""} />
     <input type="hidden" name="googleMapsQuery" value={location.googleMapsQuery ?? ""} />
     <input type="hidden" name="googlePlaceName" value={location.googlePlaceName ?? ""} />
-    <GoogleMapsPlacePicker tripId={tripId} label="Google Maps location" optional disabled={disabled}
+    <GoogleMapsPlacePicker tripId={tripId} label="Google Maps location" optional={optional} disabled={disabled}
       value={location.googlePlaceId ? {
         name: location.googlePlaceName || "Location added", query: location.googleMapsQuery ?? "Location", placeId: location.googlePlaceId,
       } : null}

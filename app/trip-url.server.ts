@@ -6,6 +6,11 @@ import { tripOwners, trips } from "./db/schema";
 import { newTripCode } from "./trip-code";
 
 // Callers still authorize ownership against the resolved internal UUID.
+export function tripIdentifierWhere(identifier: string) {
+  return /^[23456789abcdefghijkmnpqrstuvwxyz]{8}$/.test(identifier)
+    ? eq(trips.code, identifier) : eq(trips.id, identifier);
+}
+
 export async function resolveTripId(db: Database, identifier: string) {
   if (!/^[23456789abcdefghijkmnpqrstuvwxyz]{8}$/.test(identifier)) return identifier;
   const [trip] = await db.select({ id: trips.id }).from(trips)

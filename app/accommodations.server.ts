@@ -2,7 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { data } from "react-router";
 import { v7 as uuidv7 } from "uuid";
 import type { Database } from "./db.server";
-import { accommodationDocuments, accommodationPlaces, accommodations, trips } from "./db/schema";
+import { accommodationDocuments, accommodationPlaces, accommodations, type Accommodation, type AccommodationDocument } from "./db/schema";
 import { readAccommodation } from "./accommodations";
 import { readCardLocation } from "./card-location";
 import { MAX_ATTACHMENT_SIZE } from "./attachments";
@@ -22,8 +22,7 @@ export async function loadAccommodations(db: Database, tripId: string) {
 
 export async function accommodationAction(db: Database, bucket: R2Bucket, tripId: string, request: Request) {
   if (Number(request.headers.get("Content-Length")) > 11 * 1024 * 1024) return fail("Choose a PDF of 10 MB or smaller.", 413);
-  const [trip] = await db.select({ id: trips.id }).from(trips).where(eq(trips.id, tripId)).limit(1);
-  if (!trip) return fail("That trip no longer exists.", 404);
+  // The route has already checked ownership and therefore trip existence.
   let form: FormData;
   try { form = await request.formData(); } catch { return fail("The form could not be read. Please try again."); }
   const get = (key: string) => typeof form.get(key) === "string" ? (form.get(key) as string).trim() : "";
@@ -50,9 +49,16 @@ export async function accommodationAction(db: Database, bucket: R2Bucket, tripId
   }
   if (!["add-candidate", "save-candidate", "delete-candidate"].includes(intent)) return fail("Unknown accommodation action.");
   const id = intent === "add-candidate" ? uuidv7() : get("accommodationId");
-  const [current] = await db.select().from(accommodations).where(and(eq(accommodations.id, id), eq(accommodations.placeId, place.id))).limit(1);
-  if (intent !== "add-candidate" && !current) return fail("That accommodation no longer exists.", 404);
-  const [existingDocument] = await db.select().from(accommodationDocuments).where(eq(accommodationDocuments.accommodationId, id)).limit(1);
+  let current: Accommodation | undefined;
+  let existingDocument: AccommodationDocument | null | undefined;
+  if (intent !== "add-candidate") {
+    const row = await db.select({ accommodation: accommodations, document: accommodationDocuments }).from(accommodations)
+      .leftJoin(accommodationDocuments, eq(accommodationDocuments.accommodationId, accommodations.id))
+      .where(and(eq(accommodations.id, id), eq(accommodations.placeId, place.id))).get();
+    if (!row) return fail("That accommodation no longer exists.", 404);
+    current = row.accommodation;
+    existingDocument = row.document;
+  }
   if (intent === "delete-candidate") {
     await db.delete(accommodations).where(eq(accommodations.id, id));
     if (existingDocument) await bucket.delete(documentKey(id, existingDocument.id)).catch(() => console.error("Could not clean up accommodation document"));

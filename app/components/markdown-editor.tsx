@@ -18,7 +18,7 @@ export function MarkdownEditor({
   id, name, value, onChange, disabled = false,
   label = "Description", placeholder = "Add a description…",
   emptyMessage = "No description yet.", saveHint = "Save the card to keep your changes.",
-  maxLength,
+  maxLength, editWhenEmpty = false,
 }: {
   id: string;
   name: string;
@@ -30,8 +30,9 @@ export function MarkdownEditor({
   emptyMessage?: string;
   saveHint?: string;
   maxLength?: number;
+  editWhenEmpty?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(editWhenEmpty && !value.trim());
   const [tab, setTab] = useState<"write" | "preview">("write");
   const textarea = useRef<HTMLTextAreaElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -142,7 +143,7 @@ export function MarkdownEditor({
       <div className="py-2 px-3 border-t border-t-border text-muted-foreground text-[11px] flex items-center justify-between gap-2">
         <p id={`${id}-hint`}>Markdown supported. {saveHint}</p>
         <button type="button" className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-secondary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-muted [&:hover:not(:disabled)]:text-foreground disabled:opacity-[.45] disabled:cursor-not-allowed" disabled={disabled} onClick={() => {
-          setEditing(false);
+          setEditing(editWhenEmpty && !value.trim());
           requestAnimationFrame(() => document.getElementById(id)?.focus());
         }}>Done</button>
       </div>

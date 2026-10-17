@@ -8,7 +8,7 @@ import type { Route } from "./+types/notes";
 import { requireTripOwner } from "../auth.server";
 import { getDb } from "../db.server";
 import { getNotesPage } from "../trip-page.server";
-import { tripNotes, tripOwners, tripTodos, trips } from "../db/schema";
+import { tripNotes, tripOwners, tripTodos } from "../db/schema";
 import { listTripOwners } from "../trip-owners.server";
 import { parseTodoMentions } from "../todo-mentions";
 import { TodoMentionInput } from "../components/todo-mention-input";
@@ -28,39 +28,37 @@ export async function action({ params, request }: Route.ActionArgs) {
   const tripId = await resolveTripId(db, params.tripId);
   await requireTripOwner(request, db, tripId);
   try {
-    const [trip] = await db.select({ id: trips.id }).from(trips).where(eq(trips.id, tripId)).limit(1);
-    if (!trip) return fail("That trip no longer exists.", 404);
     const form = await request.formData();
     const get = (key: string) => typeof form.get(key) === "string" ? form.get(key) as string : "";
     const intent = get("intent");
     const ownerId = get("ownerId") || null;
     if ((intent === "add-todo" || intent === "tag-todo") && ownerId) {
       const [owner] = await db.select({ userId: tripOwners.userId }).from(tripOwners)
-        .where(and(eq(tripOwners.tripId, trip.id), eq(tripOwners.userId, ownerId))).limit(1);
+        .where(and(eq(tripOwners.tripId, tripId), eq(tripOwners.userId, ownerId))).limit(1);
       if (!owner) return fail("Choose an owner of this trip.");
     }
 
     if (intent === "upload-files") {
-      return await uploadTripAttachments(db, env.ATTACHMENTS, trip.id, form);
+      return await uploadTripAttachments(db, env.ATTACHMENTS, tripId, form);
     } else if (intent === "remove-file") {
-      return await removeTripAttachment(db, env.ATTACHMENTS, trip.id, get("attachmentId"));
+      return await removeTripAttachment(db, env.ATTACHMENTS, tripId, get("attachmentId"));
     } else if (intent === "save-notes") {
       const body = get("notes");
       if (body.length > 50000) return fail("Keep your notes under 50,000 characters.");
-      await db.insert(tripNotes).values({ tripId: trip.id, body })
+      await db.insert(tripNotes).values({ tripId: tripId, body })
         .onConflictDoUpdate({ target: tripNotes.tripId, set: { body } });
     } else if (intent === "add-todo") {
-      const { title, ownerIds } = parseTodoMentions(get("title"), await listTripOwners(db, trip.id));
+      const { title, ownerIds } = parseTodoMentions(get("title"), await listTripOwners(db, tripId));
       if (ownerIds.length > 1) return fail("Tag one person per to-do. Remove the extra mentions and try again.");
       if (!title || title.length > 500) return fail("Enter a to-do (up to 500 characters).");
-      await db.insert(tripTodos).values({ id: uuidv7(), tripId: trip.id, title, ownerId: ownerIds[0] ?? ownerId });
+      await db.insert(tripTodos).values({ id: uuidv7(), tripId: tripId, title, ownerId: ownerIds[0] ?? ownerId });
     } else if (intent === "tag-todo") {
       const changed = await db.update(tripTodos).set({ ownerId })
-        .where(and(eq(tripTodos.id, get("todoId")), eq(tripTodos.tripId, trip.id)))
+        .where(and(eq(tripTodos.id, get("todoId")), eq(tripTodos.tripId, tripId)))
         .returning({ id: tripTodos.id });
       if (!changed.length) return fail("That to-do no longer exists.", 404);
     } else if (intent === "toggle-todo" || intent === "delete-todo") {
-      const condition = and(eq(tripTodos.id, get("todoId")), eq(tripTodos.tripId, trip.id));
+      const condition = and(eq(tripTodos.id, get("todoId")), eq(tripTodos.tripId, tripId));
       if (intent === "toggle-todo" && !["true", "false"].includes(get("completed"))) return fail("Choose whether this to-do is complete.");
       const changed = intent === "delete-todo"
         ? await db.delete(tripTodos).where(condition).returning({ id: tripTodos.id })

@@ -18,7 +18,7 @@ export function useChatStream(endpoint: string) {
     setProgress({ question: "", text: "", status: "", tools: [] });
   }
 
-  async function send(question: string): Promise<TripChatData | undefined> {
+  async function send(question: string, fields: Record<string, string> = {}): Promise<TripChatData | undefined> {
     if (controller.current) return;
     const request = new AbortController();
     controller.current = request;
@@ -26,7 +26,7 @@ export function useChatStream(endpoint: string) {
     setBusy(true);
     setProgress({ question, text: "", status: "Sol is preparing a reply…", tools: [] });
     try {
-      const response = await fetch(endpoint, { method: "POST", headers: { Accept: "text/event-stream" }, body: new URLSearchParams({ intent: "send", message: question }), signal: request.signal });
+      const response = await fetch(endpoint, { method: "POST", headers: { Accept: "text/event-stream" }, body: new URLSearchParams({ ...fields, intent: "send", message: question }), signal: request.signal });
       if (!response.ok || !response.headers.get("Content-Type")?.includes("text/event-stream")) {
         const data = response.headers.get("Content-Type")?.includes("application/json") ? await response.json() as TripChatData : null;
         throw new Error(data?.error ?? "Could not load the reply. Please reload the chat and try again.");
