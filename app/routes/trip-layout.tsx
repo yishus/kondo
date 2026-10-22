@@ -10,6 +10,7 @@ import { trips } from "../db/schema";
 import { formatTripDates } from "../trip-dates";
 import { loadTripHeader } from "../trip-data.server";
 import { AppShell } from "../components/app-shell";
+import { TripTitle } from "../components/trip-title";
 import { Icon, type IconName } from "../components/icon";
 import { TimezoneOptions } from "../components/timezone-field";
 import { readTimezone } from "../timezones";
@@ -21,7 +22,16 @@ export async function action({ params, request }: Route.ActionArgs) {
   const tripId = await resolveTripId(db, params.tripId);
   await requireTripOwner(request, db, tripId);
   const form = await request.formData();
-  if (form.get("intent") !== "update-timezone") return data({ ok: false as const, error: "Unknown action." }, { status: 400 });
+  const intent = form.get("intent");
+  if (intent === "update-title") {
+    const value = form.get("title");
+    const title = typeof value === "string" ? value.trim() : "";
+    if (!title) return data({ ok: false as const, error: "Enter a title for your trip." }, { status: 400 });
+    if (title.length > 100) return data({ ok: false as const, error: "Keep the title under 100 characters." }, { status: 400 });
+    await db.update(trips).set({ title }).where(eq(trips.id, tripId));
+    return { ok: true as const, error: null };
+  }
+  if (intent !== "update-timezone") return data({ ok: false as const, error: "Unknown action." }, { status: 400 });
   const result = readTimezone(form.get("timezone"));
   if (!result.ok) return data(result, { status: 400 });
   await db.update(trips).set({ timezone: result.timezone }).where(eq(trips.id, tripId));
@@ -57,7 +67,7 @@ export default function TripLayout({ loaderData: { trip, dates, currentUser } }:
   const navigation = <>
     <header className="flex flex-wrap items-center justify-between gap-3 mb-6 [&_h1]:text-[21px] [&_h1]:font-[550] [&_h1]:tracking-[-.035em] [&_h1]:leading-[1.3] [&_h1]:wrap-anywhere [@media(max-width:_760px)]:flex-col [@media(max-width:_760px)]:items-start [@media(max-width:_760px)]:[&_a]:min-h-11">
       <div className="min-w-0">
-        <h1>{trip.title}</h1>
+        <TripTitle key={trip.id} tripId={trip.code ?? trip.id} title={trip.title} />
         {trip.description && <p className="mt-2 text-muted-foreground text-[13px] leading-[1.6]">{trip.description}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-3 [@media(max-width:_760px)]:flex-col [@media(max-width:_760px)]:items-start">
