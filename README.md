@@ -2,9 +2,43 @@
 
 Kondo is a trip planner for type A travelers.
 
-## Deploy your own version
+## Features
 
-You need [Bun](https://bun.sh/), Node.js, and a Cloudflare account with Workers, D1, and R2 available. Optional integrations use your own provider accounts and billing. Your deployment has its own database, files, users, and credentials.
+- Organise your trip by day, one card per activity
+  - Location: Basic card type representing a restaurant, place of interest
+  - Hike: Upload GPX for altitude profile and map route
+  - Event: Special events
+  - Transport: Destination/Arrival, mode of travel
+- Chat with your cards to include more information or get up to date information on time sensitive information eg. weather
+- Accomodations: Shortlist and confirm your places of stay
+- Map: See all pinned location across a single map, chat about your trip and add/edit cards
+- Todo list and notes
+- On the trip
+  - Trip aware journal and chat
+
+## Develop
+
+```bash
+git clone https://github.com/yishus/kondo.git
+cd kondo
+cp wrangler.jsonc.example wrangler.jsonc
+bun install --frozen-lockfile
+cp .dev.vars.example .dev.vars
+openssl rand -base64 32
+```
+
+Paste the generated value into `BETTER_AUTH_SECRET` in `.dev.vars`, and replace `you@example.com` in `CLOSED_BETA_EMAILS` with the email you will use to sign up. Leave the optional integration keys empty to try core planning. The template's Turnstile keys are for local testing. Keep `BETTER_AUTH_URL` and the browser URL on the same origin, initially `http://localhost:5173`.
+
+```bash
+bun run db:migrate:local
+bun run dev --port 5173
+```
+
+Open `http://localhost:5173` and create an account using your allowlisted email. Local development uses a local database and file bucket; a Cloudflare login and real resource IDs are only needed for deployment. If the port is already in use, choose another port and update `BETTER_AUTH_URL` to match.
+
+## Deploy
+
+You need Bun 1.3.4+, Node.js 22.22.0+, and a Cloudflare account with Workers, D1, and R2 available. Optional integrations use your own provider accounts and billing. Your deployment has its own database, files, users, and credentials.
 
 ### 1. Prepare the configuration
 
@@ -12,7 +46,7 @@ Fork or clone this repository. From the project folder, copy the template **befo
 
 ```bash
 cp wrangler.jsonc.example wrangler.jsonc
-bun install
+bun install --frozen-lockfile
 bunx wrangler login
 ```
 
@@ -26,8 +60,6 @@ bunx wrangler r2 bucket create kondo-attachments
 ```
 
 Replace `REPLACE_WITH_YOUR_D1_DATABASE_ID` in `wrangler.jsonc` with the ID returned by the database command. If you choose different resource names, update `database_name` and `bucket_name` too.
-
-Keep the R2 bucket private: leave its public `r2.dev` URL disabled and do not attach public bucket custom domains. Files are served through the app's authenticated routes. The template's `remote: false` selects local storage during development; it does not control bucket privacy.
 
 ### 3. Configure authentication
 
@@ -78,9 +110,3 @@ Google browser and Thunderforest keys are visible in the browser. OpenAI, TypeSa
 ```bash
 bun run deploy
 ```
-
-This builds the app, applies all pending D1 migrations to your remote database, and deploys the Worker. Open the URL printed by Wrangler and sign up with an allowlisted email. Other people must create an account on your deployment before you can add them as trip owners in **Settings**.
-
-For future updates, pull the latest code, run `bun install`, then run `bun run deploy` again. Your ignored `wrangler.jsonc` remains your deployment configuration. Local development data and files are not copied to production.
-
-Store production credentials as [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/). For local development, copy [.dev.vars.example](.dev.vars.example) to `.dev.vars`. The local Wrangler configuration and secret files are ignored by Git; keep filled-in credentials out of templates and source control.
