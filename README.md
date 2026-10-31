@@ -4,13 +4,13 @@ Kondo is a trip planner for type A travelers.
 
 ## Features
 
-- Organise your trip by day, one card per activity
+- Organize your trip by day, one card per activity
   - Location: Basic card type representing a restaurant, place of interest
   - Hike: Upload GPX for altitude profile and map route
   - Event: Special events
   - Transport: Destination/Arrival, mode of travel
 - Chat with your cards to include more information or get up to date information on time sensitive information eg. weather
-- Accomodations: Shortlist and confirm your places of stay
+- Accommodations: Shortlist and confirm your places of stay
 - Map: See all pinned location across a single map, chat about your trip and add/edit cards
 - Todo list and notes
 - On the trip
