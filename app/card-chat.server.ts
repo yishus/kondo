@@ -202,7 +202,7 @@ export async function requestChatResponse({ apiKey, signal, fetcher = fetch, now
         const item = event.item;
         if (item?.id && (item.type === "web_search_call" || item.type === "function_call")) {
           const action = item.action;
-          const tool: ChatToolCall = { id: item.id, name: item.type === "web_search_call" ? "Web search" : item.name === "suggest_cards" ? "Suggest cards" : item.name === "add_itinerary_cards" ? "Add itinerary cards" : "Tool call",
+          const tool: ChatToolCall = { id: item.id, name: item.type === "web_search_call" ? "Web search" : item.name === "suggest_cards" ? "Suggest cards" : item.name === "add_itinerary_cards" ? "Add itinerary cards" : item.name === "propose_card_updates" ? "Propose card updates" : "Tool call",
             status: event.type.endsWith(".done") && item.name !== "add_itinerary_cards" ? "completed" : "running",
             detail: (action?.queries?.join(" · ") || action?.query || action?.url)?.slice(0, 500) };
           toolCalls.set(tool.id, tool);

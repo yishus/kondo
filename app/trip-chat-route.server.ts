@@ -11,15 +11,15 @@ import { MAX_CHAT_MESSAGES, MAX_CHAT_MESSAGE_LENGTH, type ChatMessage } from "./
 import { CardChatError } from "./card-chat.server";
 import { generateTripChatReply, loadTripChatContext } from "./trip-chat.server";
 import { type TripChatData, type TripChatMessage } from "./trip-chat";
-import { readCardDetails } from "./card-types";
 import { readCardLocation } from "./card-location";
 import { photoForCardLocation } from "./place-photo.server";
 import { UNSCHEDULED_COLUMN_ID } from "./card-order";
 import { nextCardRank } from "./card-rank.server";
 import { generateLiveChatReply, loadLiveChatContext } from "./trip-live.server";
 import { readTimezone } from "./timezones";
-import { MAX_ADDED_CHAT_CARDS, prepareChatCards, savePlanningChatReply, type PendingChatCard } from "./trip-chat-cards.server";
+import { MAX_ADDED_CHAT_CARDS, prepareChatCards, readSuggestedCardDetails, savePlanningChatReply, type PendingChatCard } from "./trip-chat-cards.server";
 import { searchPlaces } from "./place-search.server";
+import { approveCardUpdate, prepareCardUpdates } from "./trip-chat-updates.server";
 
 type ChatRouteArgs = { request: Request; params: { tripId: string } };
 
@@ -46,6 +46,7 @@ export async function loadChat({ request, params }: ChatRouteArgs, live = false)
 }
 
 export async function sendChat({ request, params }: ChatRouteArgs, live = false) {
+  const googleMapsApiKey = (env as typeof env & { GOOGLE_MAPS_API_KEY?: string }).GOOGLE_MAPS_API_KEY;
   if (request.method !== "POST") return reply({ error: "Method not allowed." }, 405);
   // Paid, cookie-authenticated calls must originate from this application.
   if (request.headers.get("Origin") !== new URL(request.url).origin) return reply({ error: "Please send your message from this app." }, 403);
@@ -73,9 +74,9 @@ export async function sendChat({ request, params }: ChatRouteArgs, live = false)
   const intent = form.get("intent");
   const value = form.get("message");
   const message = typeof value === "string" ? value.trim() : "";
-  if (intent !== "clear" && intent !== "send" && intent !== "add") return reply({ error: "Unknown chat action." }, 400);
+  if (intent !== "clear" && intent !== "send" && intent !== "add" && intent !== "approve-update" && intent !== "reject-update") return reply({ error: "Unknown chat action." }, 400);
   if (intent === "send" && (!message || message.length > MAX_CHAT_MESSAGE_LENGTH)) return reply({ error: `Enter a message of up to ${MAX_CHAT_MESSAGE_LENGTH} characters.` }, 400);
-  if (live && intent === "add") return reply({ error: "Cards are read-only while on the trip." }, 400);
+  if (live && (intent === "add" || intent === "approve-update" || intent === "reject-update")) return reply({ error: "Cards are read-only while on the trip." }, 400);
   const timezone = readTimezone(form.get("timezone"));
   if (live && !timezone.ok) return reply({ error: timezone.error }, 400);
   const key = apiKey();
@@ -92,6 +93,24 @@ export async function sendChat({ request, params }: ChatRouteArgs, live = false)
       await db.update(tripChats).set({ messages: [] }).where(and(scope, eq(tripChats.lockId, lockId)));
       return reply({ messages: [], available: Boolean(key), completed: lockId });
     }
+    if (intent === "approve-update" || intent === "reject-update") {
+      const messageId = form.get("messageId");
+      const updateId = form.get("updateId");
+      if (typeof messageId !== "string" || typeof updateId !== "string") return reply({ error: "Choose a proposed card update." }, 400);
+      if (intent === "approve-update") {
+        const messages = await approveCardUpdate(db, { tripId, userId, lockId, messages: thread.messages, messageId, updateId });
+        return reply({ messages, available: Boolean(key), tripChanged: true });
+      }
+      const proposal = thread.messages.find((message) => message.id === messageId && message.role === "assistant")?.updates?.find((update) => update.id === updateId);
+      if (!proposal) return reply({ error: "That proposed update is no longer available. Reload the chat." }, 404);
+      if (proposal.status !== "pending") return reply({ messages: thread.messages, available: Boolean(key) });
+      const messages = thread.messages.map((message) => message.id !== messageId ? message : {
+        ...message, updates: message.updates?.map((update) => update.id === updateId ? { ...update, status: "rejected" as const } : update),
+      });
+      const saved = await db.update(tripChats).set({ messages }).where(and(scope, eq(tripChats.lockId, lockId))).returning({ tripId: tripChats.tripId });
+      if (!saved.length) throw new CardChatError("This chat changed. Reload the chat before trying again.", 409);
+      return reply({ messages, available: Boolean(key) });
+    }
     if (intent === "add") {
       const messageId = form.get("messageId");
       const suggestionId = form.get("suggestionId");
@@ -104,16 +123,14 @@ export async function sendChat({ request, params }: ChatRouteArgs, live = false)
       if (tripDayId && !await db.select({ id: tripDays.id }).from(tripDays).where(and(eq(tripDays.id, tripDayId), eq(tripDays.tripId, tripId))).get()) {
         return reply({ error: "That day no longer exists. Choose another day or Unscheduled." }, 400);
       }
-      const detailsForm = new FormData();
-      for (const field of ["type", "title", "description", "locationCategory", "transportMode", "startLocation", "endLocation"] as const) detailsForm.set(field, suggestion[field]);
-      const details = readCardDetails(detailsForm);
+      const details = readSuggestedCardDetails(suggestion);
       if (!details.ok) return reply({ error: details.error }, 400);
       const location = readCardLocation(suggestion.type === "location" || suggestion.type === "hike" ? form : new FormData());
       if (!location.ok) return reply({ error: location.error }, 400);
       const cardId = suggestion.id;
       const messages = thread.messages.map((message) => ({ ...message, suggestions: message.suggestions?.map((item) => item.id === suggestion.id ? { ...item, addedCardId: cardId } : item) }));
       const d = details.details;
-      const googlePhoto = await photoForCardLocation(d.type, location.location.googlePlaceId, undefined, env.GOOGLE_MAPS_API_KEY, request.signal);
+      const googlePhoto = await photoForCardLocation(d.type, location.location.googlePlaceId, undefined, googleMapsApiKey, request.signal);
       // Both statements run in one D1 transaction. Fence writes by lock token;
       // deterministic IDs plus saved proposal status make retries idempotent.
       const [, saved] = await db.batch([
@@ -157,7 +174,7 @@ export async function sendChat({ request, params }: ChatRouteArgs, live = false)
         addCards: async (suggestions) => {
           if (pending.length + suggestions.length > MAX_ADDED_CHAT_CARDS) throw new CardChatError("Add up to 40 cards per request. No cards were added.", 400);
           const prepared = await prepareChatCards(suggestions, async (query) => {
-            const { body } = await searchPlaces(query, env.GOOGLE_MAPS_API_KEY, signal);
+            const { body } = await searchPlaces(query, googleMapsApiKey, signal);
             const place = body.places[0];
             return place ? { googlePlaceId: place.id, googlePlaceName: place.name, googleMapsQuery: query } : null;
           });
@@ -167,6 +184,7 @@ export async function sendChat({ request, params }: ChatRouteArgs, live = false)
             missingMapPins: prepared.filter((card) => ["location", "hike"].includes(card.suggestion.type) && !card.location.googlePlaceId).map((card) => card.suggestion.title),
           };
         },
+        proposeUpdates: (updates) => prepareCardUpdates(db, tripId, updates),
       });
       const completedTools = [...toolCalls.values()].map((tool) => tool.name === "Add itinerary cards" ? { ...tool, status: "completed" as const, detail: `${pending.length} cards added to trip` } : tool);
       const messages: TripChatMessage[] = [...thread.messages, question, { ...answer, ...(completedTools.length ? { toolCalls: completedTools } : {}), id: crypto.randomUUID(), role: "assistant", createdAt: new Date().toISOString() }];

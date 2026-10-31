@@ -54,6 +54,7 @@ const cardTypePillClasses: Record<CardType, string> = {
   hike: "bg-[light-dark(#eaf6eb,#193a25)] text-[light-dark(#15803d,#86efac)]",
   city: "bg-[light-dark(#e7f5fa,#163744)] text-[light-dark(#0e7490,#67e8f9)]",
   transport: "bg-[light-dark(#eaf0ff,#1d2e52)] text-[light-dark(#1d4ed8,#93c5fd)]",
+  event: "bg-[light-dark(#fff1f2,#451a28)] text-[light-dark(#be123c,#fda4af)]",
 };
 
 function formString(formData: FormData, key: string) {
@@ -105,6 +106,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 
 export async function action({ params, request }: Route.ActionArgs) {
   const db = getDb(env.DB);
+  const googleMapsApiKey = (env as typeof env & { GOOGLE_MAPS_API_KEY?: string }).GOOGLE_MAPS_API_KEY;
   const tripId = await resolveTripId(db, params.tripId);
   await requireTripOwner(request, db, tripId);
   if (Number(request.headers.get("Content-Length")) > 51 * 1024 * 1024) {
@@ -277,10 +279,10 @@ export async function action({ params, request }: Route.ActionArgs) {
 
     const transportEstimate = await fetchTransportEstimate({
       card: details.details, date: tripDate, timezone,
-      utcOffsetMinutes: formString(formData, "transportUtcOffset"), apiKey: env.GOOGLE_MAPS_API_KEY,
+      utcOffsetMinutes: formString(formData, "transportUtcOffset"), apiKey: googleMapsApiKey,
     });
     const cardId = uuidv7();
-    const googlePhoto = await photoForCardLocation(details.details.type, location.location.googlePlaceId, undefined, env.GOOGLE_MAPS_API_KEY, request.signal);
+    const googlePhoto = await photoForCardLocation(details.details.type, location.location.googlePlaceId, undefined, googleMapsApiKey, request.signal);
     return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, (coverAttachmentId) => [
       db.insert(cards).values({
         ...location.location,
@@ -335,10 +337,10 @@ export async function action({ params, request }: Route.ActionArgs) {
       : [];
     const transportEstimate = await fetchTransportEstimate({
       card: details.details, date: day?.tripDate ?? null, timezone: effectiveTimezone(trip.timezone, day?.timezone ?? null),
-      utcOffsetMinutes: formString(formData, "transportUtcOffset"), apiKey: env.GOOGLE_MAPS_API_KEY,
+      utcOffsetMinutes: formString(formData, "transportUtcOffset"), apiKey: googleMapsApiKey,
     });
 
-    const googlePhoto = await photoForCardLocation(details.details.type, location.location.googlePlaceId, card, env.GOOGLE_MAPS_API_KEY, request.signal);
+    const googlePhoto = await photoForCardLocation(details.details.type, location.location.googlePlaceId, card, googleMapsApiKey, request.signal);
     return saveCardWithAttachments(db, env.ATTACHMENTS, cardId, formData, (coverAttachmentId) => [
       db.update(cards)
         .set({
@@ -624,7 +626,6 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
   const [activeCard, setActiveCard] = useState<ActiveCard | null>(null);
   const [cardPanel, setCardPanel] = useState<"details" | "attachments" | "chat">("details");
   const [cardDraft, setCardDraft] = useState({ type: "location" as CardType, title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", startLocationName: "", endLocationName: "", departureTime: "", arrivalTime: "", departureTimezone: "", arrivalTimezone: "", serviceNumber: "" });
-  const [locationDetailsOpen, setLocationDetailsOpen] = useState(false);
   const [cardLocation, setCardLocation] = useState<CardLocation>({ googlePlaceId: null, googleMapsQuery: null });
   const [cardErrorFor, setCardErrorFor] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -721,7 +722,6 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
 
   function addCard(tripDayId: string) {
     setCardPanel("details");
-    setLocationDetailsOpen(false);
     setCardLocation({ googlePlaceId: null, googleMapsQuery: null });
     setActiveCard({ mode: "create", tripDayId });
     setCardDraft({ type: "location", title: "", description: "", locationCategory: "", transportMode: "train", startLocation: "", endLocation: "", startLocationName: "", endLocationName: "", departureTime: "", arrivalTime: "", departureTimezone: "", arrivalTimezone: "", serviceNumber: "" });
@@ -877,7 +877,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
               <input name="intent" type="hidden" value={activeCard.mode === "create" ? "add-card" : "update-card"} />
               {activeCard.mode === "create" ? <input name="tripDayId" type="hidden" value={activeCard.tripDayId} /> : <input name="cardId" type="hidden" value={activeCard.cardId} />}
               <input type="hidden" name="type" value={cardDraft.type} />
-              {(activeCard.mode === "edit" || cardDraft.type === "location" && !locationDetailsOpen) && <input type="hidden" name="title" value={cardDraft.title} />}
+              {activeCard.mode === "edit" && <input type="hidden" name="title" value={cardDraft.title} />}
 
               <div id="card-details-panel" role={activeCard.mode === "edit" ? "tabpanel" : undefined} aria-labelledby={activeCard.mode === "edit" ? "card-details-tab" : undefined} hidden={cardPanel !== "details"}>
               <div className="grid min-w-0 gap-4.5">
@@ -890,36 +890,26 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                 </label>}
 
                 {activeCard.mode === "create" && cardDraft.type === "location" && <>
-                  <CardLocationPicker key={`create-location:${activeCardKey}`} tripId={trip.code ?? trip.id} location={cardLocation} optional={false}
+                  <CardLocationPicker key={`create-location:${activeCardKey}`} tripId={trip.code ?? trip.id} location={cardLocation}
                     disabled={cardFetcher.state !== "idle"} onChange={(location) => {
                       setCardLocation(location);
                       if (!location.googlePlaceId) setCardDraft((draft) => ({ ...draft, title: "", locationCategory: "" }));
                     }} onPlaceSelected={(place) => setCardDraft((draft) => ({ ...draft, title: place.name, locationCategory: placeLocationCategory(place) }))} />
-                  <div className="min-w-0 rounded-md border border-border">
-                    <button type="button" className="flex min-h-9 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
-                      aria-expanded={locationDetailsOpen} aria-controls="location-card-fields" onClick={() => {
-                        setLocationDetailsOpen(!locationDetailsOpen);
-                      }}>
-                      <Icon name="chevron" className={`size-3.5 shrink-0 transition-transform ${locationDetailsOpen ? "rotate-90" : ""}`} />
-                      No Google maps location
-                    </button>
-                    {locationDetailsOpen && <div id="location-card-fields" className="grid min-w-0 gap-4 px-3 pb-3 pt-1">
-                      <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground" htmlFor="card-title">Title
-                        <input id="card-title" name="title" ref={titleInputRef} className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal"
-                          value={cardDraft.title} required onChange={(event) => setCardDraft((draft) => ({ ...draft, title: event.target.value }))} />
-                      </label>
-                      <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">Subcategory
-                        <select className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name="locationCategory" value={cardDraft.locationCategory}
-                          onChange={(event) => setCardDraft((draft) => ({ ...draft, locationCategory: event.target.value }))}>
-                          <option value="">No subcategory</option>
-                          {Object.entries(locationCategories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                        </select>
-                      </label>
-                    </div>}
-                  </div>
+                  <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">Subcategory
+                    <select className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name="locationCategory" value={cardDraft.locationCategory}
+                      onChange={(event) => setCardDraft((draft) => ({ ...draft, locationCategory: event.target.value }))}>
+                      <option value="">No subcategory</option>
+                      {Object.entries(locationCategories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                  <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground" htmlFor="card-title">
+                    <span>Title <span className="font-normal text-muted-foreground">(optional with Google Maps location)</span></span>
+                    <input id="card-title" name="title" ref={titleInputRef} className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal"
+                      value={cardDraft.title} required={!cardLocation.googlePlaceId} onChange={(event) => setCardDraft((draft) => ({ ...draft, title: event.target.value }))} />
+                  </label>
                 </>}
 
-                {activeCard.mode === "create" && (cardDraft.type === "hike" || cardDraft.type === "city") && <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground" htmlFor="card-title">
+                {activeCard.mode === "create" && (cardDraft.type === "hike" || cardDraft.type === "city" || cardDraft.type === "event") && <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground" htmlFor="card-title">
                   {cardDraft.type === "city" ? "City / area / region name" : "Title"}
                   <input id="card-title" name="title" ref={titleInputRef} className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal"
                     value={cardDraft.title} required onChange={(event) => setCardDraft((draft) => ({ ...draft, title: event.target.value }))} />
@@ -932,7 +922,6 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                     {Object.entries(locationCategories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>}
-                {activeCard.mode === "create" && cardDraft.type === "location" && !locationDetailsOpen && <input type="hidden" name="locationCategory" value={cardDraft.locationCategory} />}
 
                 {cardDraft.type === "transport" && <>
                   <input type="hidden" name="transportUtcOffset" value={activeCardDate && (cardDraft.departureTime || cardDraft.arrivalTime)
@@ -947,22 +936,20 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                     {([ ["startLocation", "Start location", "departureTime", "departureTimezone", "Departure"], ["endLocation", "End location", "arrivalTime", "arrivalTimezone", "Arrival"] ] as const).map(([field, label, time, zone, timeLabel]) => <div key={field} className="grid min-w-0 gap-3">
                       <TransportLocationPicker key={`${activeCardKey}:${field}`} tripId={trip.code ?? trip.id} name={field} label={label} value={cardDraft[field]} placeName={cardDraft[`${field}Name`]}
                         disabled={cardFetcher.state !== "idle"} onChange={(value, placeName) => setCardDraft((draft) => ({ ...draft, [field]: value, [`${field}Name`]: placeName }))} />
-                      {activeCard.mode === "edit" && <>
-                        <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">{timeLabel} time
-                          <input className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name={time} type="time" value={cardDraft[time]}
-                            onChange={(event) => setCardDraft((draft) => ({ ...draft, [time]: event.target.value }))} />
-                        </label>
-                        <TimezoneField name={zone} label={`${timeLabel} time zone (optional)`} timezone={cardDraft[zone]}
-                          placeholder={activeCardTimezone ? `Default: ${activeCardTimezone}` : "Use device time zone"}
-                          onChange={(value) => setCardDraft((draft) => ({ ...draft, [zone]: value }))} disabled={cardFetcher.state !== "idle"} />
-                      </>}
+                      <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">{timeLabel} time
+                        <input className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name={time} type="time" value={cardDraft[time]}
+                          onChange={(event) => setCardDraft((draft) => ({ ...draft, [time]: event.target.value }))} />
+                      </label>
+                      <TimezoneField name={zone} label={`${timeLabel} time zone (optional)`} timezone={cardDraft[zone]}
+                        placeholder={activeCardTimezone ? `Default: ${activeCardTimezone}` : "Use device time zone"}
+                        onChange={(value) => setCardDraft((draft) => ({ ...draft, [zone]: value }))} disabled={cardFetcher.state !== "idle"} />
                     </div>)}
                   </div>
+                  <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">Service number
+                    <input className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name="serviceNumber" value={cardDraft.serviceNumber}
+                      onChange={(event) => setCardDraft((draft) => ({ ...draft, serviceNumber: event.target.value }))} />
+                  </label>
                   {activeCard.mode === "edit" && <>
-                    <label className="grid min-w-0 gap-1.5 text-xs font-medium text-secondary-foreground">Service number
-                      <input className="min-h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 py-2 text-[13px] font-normal" name="serviceNumber" value={cardDraft.serviceNumber}
-                        onChange={(event) => setCardDraft((draft) => ({ ...draft, serviceNumber: event.target.value }))} />
-                    </label>
                     {activeSavedCard?.transportEstimate && <div className="grid gap-1">
                       <p className="text-xs font-medium text-secondary-foreground">Last saved travel-time estimate</p>
                       <TransportEstimateSummary estimate={activeSavedCard.transportEstimate} />
@@ -976,7 +963,7 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                 {activeCard.mode === "create" && cardDraft.type === "hike" && <HikeGpxEditor key={`gpx:${activeCardKey}`} tripId={trip.code ?? trip.id} title={cardDraft.title}
                   distanceKm={null} elevationGainM={null} disabled={cardFetcher.state !== "idle"} />}
 
-                {activeCard.mode === "edit" && cardDraft.type !== "city" && <div className="grid gap-1.5">
+                {cardDraft.type !== "city" && <div className="grid gap-1.5">
                   <label className="text-xs font-medium text-secondary-foreground" htmlFor="card-description">Description</label>
                   <MarkdownEditor key={activeCardKey} id="card-description" name="description" value={cardDraft.description}
                     editWhenEmpty disabled={cardFetcher.state !== "idle"}
@@ -1028,7 +1015,9 @@ export function TripPage({ loaderData, view = "itinerary" }: Pick<Route.Componen
                   className="inline-flex min-h-8.5 shrink-0 items-center justify-center gap-1.5 py-1.75 px-2.5 border border-transparent rounded-md text-primary-foreground text-[12px] font-medium leading-normal text-center transition-[background-color,border-color] duration-150 [&:hover:not(:disabled)]:bg-primary-hover [&:hover:not(:disabled)]:text-primary-foreground disabled:opacity-[.45] disabled:cursor-not-allowed bg-primary"
                   type="submit"
                   disabled={
-                    (cardDraft.type === "transport" ? !cardDraft.startLocation.trim() || !cardDraft.endLocation.trim() : !cardDraft.title.trim())
+                    (cardDraft.type === "transport" ? !cardDraft.startLocation.trim() || !cardDraft.endLocation.trim()
+                      : activeCard.mode === "create" && cardDraft.type === "location" ? !cardDraft.title.trim() && !(cardLocation.googlePlaceId && cardLocation.googlePlaceName?.trim())
+                      : !cardDraft.title.trim())
                     || cardFetcher.state !== "idle"
                   }
                 >

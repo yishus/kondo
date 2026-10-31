@@ -1,10 +1,6 @@
 import { handleAuthRequest } from "./auth.server";
 
-export function safeReturnTo(value: FormDataEntryValue | null) {
-  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//")
-    ? value
-    : "/";
-}
+export { safeReturnTo } from "./return-to";
 
 export function runAuthEndpoint(
   request: Request,

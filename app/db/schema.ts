@@ -175,8 +175,8 @@ export const cards = sqliteTable(
       .references(() => tripDays.id, { onDelete: "cascade" }),
     // Legacy reference kept only for upgrading existing databases.
     cityGroupId: text("city_group_id").references(() => dayCityGroups.id),
-    // The legacy type column remains for migration compatibility.
-    type: text("card_type", { enum: ["location", "hike", "city", "transport"] }).notNull().default("location"),
+    // Legacy type and legacy_card_type columns remain for migration compatibility.
+    type: text("card_type", { enum: ["location", "hike", "city", "transport", "event"] }).notNull().default("location"),
     transportMode: text("transport_mode"),
     startLocation: text("start_location").notNull().default(""),
     endLocation: text("end_location").notNull().default(""),
@@ -205,7 +205,7 @@ export const cards = sqliteTable(
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    check("cards_type_check", sql`${table.type} IN ('location', 'hike', 'city', 'transport')`),
+    check("cards_type_check", sql`${table.type} IN ('location', 'hike', 'city', 'transport', 'event')`),
     check("cards_title_check", sql`length(trim(${table.title})) > 0`),
     check("cards_sort_position_check", sql`${table.position} >= 0 AND ${table.position} < 1e300`),
     check("cards_hike_distance_check", sql`${table.hikeDistanceKm} >= 0`),

@@ -1,4 +1,5 @@
 import type { TripColumn } from "./card-order";
+import { locationCategories, type LocationCategory } from "./card-types";
 
 export type MapPoint = [number, number];
 export type TripMapEntry = {
@@ -7,12 +8,37 @@ export type TripMapEntry = {
   day: string;
   placeId: string | null;
   type: "location" | "hike";
+  locationCategory: LocationCategory | null;
 };
 export type ResolvedMapEntry = TripMapEntry & { point: MapPoint | null; error: string | null };
+export type MapColorBy = "day" | "type";
+
+const dayColors = ["#2563eb", "#c2410c", "#15803d", "#7e22ce", "#be123c", "#0e7490", "#a16207", "#4338ca", "#a21caf", "#0f766e"];
+const typeColors = {
+  location: { label: "Location · Uncategorized", color: "#0f766e" },
+  place_of_interest: { label: `Location · ${locationCategories.place_of_interest}`, color: "#7e22ce" },
+  food: { label: `Location · ${locationCategories.food}`, color: "#c2410c" },
+  hike: { label: "Hike", color: "#15803d" },
+};
+
+export function tripMapColorKey(entry: TripMapEntry, colorBy: MapColorBy) {
+  return colorBy === "day" ? entry.day : entry.type === "location" ? entry.locationCategory ?? "location" : entry.type;
+}
+
+export function tripMapColorGroups(entries: TripMapEntry[], colorBy: MapColorBy) {
+  const keys = new Set(entries.map((entry) => tripMapColorKey(entry, colorBy)));
+  if (colorBy === "type") {
+    return Object.entries(typeColors).filter(([key]) => keys.has(key)).map(([key, group]) => ({ key, ...group }));
+  }
+  return [...keys].sort().map((key, index) => ({
+    key, label: key,
+    color: key === "Unscheduled" ? "#64748b" : dayColors[index] ?? `hsl(${(index * 137.508) % 360} 65% 38%)`,
+  }));
+}
 
 export function tripMapEntries(columns: TripColumn[]): TripMapEntry[] {
   return columns.flatMap((column) => column.cards.flatMap((card): TripMapEntry[] =>
-    card.type === "location" || card.type === "hike" ? [{ cardId: card.id, title: card.title, day: column.date ?? "Unscheduled", placeId: card.googlePlaceId, type: card.type }] : [],
+    card.type === "location" || card.type === "hike" ? [{ cardId: card.id, title: card.title, day: column.date ?? "Unscheduled", placeId: card.googlePlaceId, type: card.type, locationCategory: card.locationCategory }] : [],
   ));
 }
 

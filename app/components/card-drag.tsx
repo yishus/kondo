@@ -156,7 +156,7 @@ export function DraggableCard({ card, disabled, onOpen, onRequestMove }: {
       <div className="flex min-w-0 flex-1 flex-col">
         <CardCover card={card} />
         <span className="relative flex items-center gap-1.25 mt-3 [@media(max-width:_760px)]:pr-11 text-muted-foreground text-[10px] font-normal data-[card-label='hike']:text-[light-dark(#15803d,#86efac)] data-[card-label='food']:text-[light-dark(#c2410c,#fdba74)] data-[card-label='place\_of\_interest']:text-[light-dark(#7e22ce,#d8b4fe)] data-[card-label='location']:text-[light-dark(#0f766e,#5eead4)] data-[card-label='city']:text-[light-dark(#0e7490,#67e8f9)] data-[card-label='transport']:text-[light-dark(#1d4ed8,#93c5fd)]" data-card-label={card.type === "location" ? card.locationCategory ?? "location" : card.type}>
-          <Icon name={card.type === "transport" ? "route" : card.type === "city" ? "compass" : "pin"} width="11" height="11" />
+          <Icon name={card.type === "transport" ? "route" : card.type === "city" ? "compass" : card.type === "event" ? "calendar" : "pin"} width="11" height="11" />
           {card.type === "transport"
             ? transportModes[card.transportMode as keyof typeof transportModes] ?? "Transport"
             : card.type === "location" && card.locationCategory

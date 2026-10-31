@@ -12,6 +12,7 @@ const prompts: Record<CardType, string[]> = {
   location: ["What should I know before visiting?", "Check opening hours for my planned visit."],
   city: ["What should I explore in this area?", "What will the weather be like on this day?"],
   transport: ["Check this route and any travel disruptions.", "What should I know about this journey?"],
+  event: ["What should I know before attending this event?", "Help me prepare for this event."],
 };
 
 export function CardChat({ tripId, cardId, type, active, date, timezone }: {

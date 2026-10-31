@@ -35,7 +35,12 @@ export async function verifyTurnstile({
     if (!response.ok) return false;
 
     const result = (await response.json()) as TurnstileVerification;
-    return result.success === true && result.action === "signup";
+    // Cloudflare's public test keys return action "test" or omit it. Still
+    // require a successful Siteverify response and the exact dummy token.
+    const testVerification = secretKey === "1x0000000000000000000000000000000AA"
+      && responseToken === "XXXX.DUMMY.TOKEN.XXXX"
+      && (result.action === undefined || result.action === "test");
+    return result.success === true && (result.action === "signup" || testVerification);
   } catch {
     return false;
   } finally {

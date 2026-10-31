@@ -1,7 +1,8 @@
 import type { Card } from "./db/schema";
+import { readCardLocation } from "./card-location";
 import { readTimezone } from "./timezones";
 
-export const cardTypes = { location: "Location", hike: "Hike", city: "City / area / region", transport: "Transport" } as const;
+export const cardTypes = { location: "Location", hike: "Hike", city: "City / area / region", transport: "Transport", event: "Event" } as const;
 export type CardType = keyof typeof cardTypes;
 export const locationCategories = {
   place_of_interest: "Place of interest",
@@ -56,7 +57,12 @@ export function readCardDetails(form: FormData, existing?: Card) {
     if (!startLocation || !endLocation) return fail("Enter both the start and end locations.");
     if ([departureTime, arrivalTime].some((time) => time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) return fail("Enter valid departure and arrival times.");
   }
-  const title = type === "transport" ? `${startLocationName || startLocation} → ${endLocationName || endLocation}` : value("title");
+  let title = type === "transport" ? `${startLocationName || startLocation} → ${endLocationName || endLocation}` : value("title");
+  if (!title && type === "location" && !existing) {
+    const location = readCardLocation(form);
+    if (!location.ok) return fail(location.error);
+    title = location.location.googlePlaceName ?? "";
+  }
   if (!title) return fail(type === "city" ? "Enter a city, area, or region name." : "Card title cannot be empty.");
   return { ok: true as const, details: {
     type: type as CardType, title, description: type === "city" ? "" : value("description"),

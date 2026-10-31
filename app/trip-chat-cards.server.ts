@@ -14,15 +14,20 @@ export type PendingChatCard = {
   location: CardLocation;
 };
 
+/** Use the same field conversion for direct additions and saved suggestions. */
+export function readSuggestedCardDetails(suggestion: Omit<TripCardSuggestion, "id" | "addedCardId">) {
+  const form = new FormData();
+  for (const [key, field] of Object.entries(suggestion)) if (typeof field === "string") form.set(key, field);
+  return readCardDetails(form);
+}
+
 /** Validate the whole batch before looking up places or preparing any writes. */
 export async function prepareChatCards(suggestions: TripCardSuggestion[], lookup?: (query: string) => Promise<CardLocation | null>) {
   if (!suggestions.length || suggestions.length > MAX_ADDED_CHAT_CARDS) throw new CardChatError("Add between 1 and 40 cards at a time.", 400);
   const pending: PendingChatCard[] = suggestions.map((suggestion) => {
     const value = readTripSuggestion(suggestion);
     if (!value) throw new CardChatError("A card was incomplete. No cards were added.", 400);
-    const form = new FormData();
-    for (const [key, field] of Object.entries(value)) if (typeof field === "string") form.set(key, field);
-    const details = readCardDetails(form);
+    const details = readSuggestedCardDetails(value);
     if (!details.ok) throw new CardChatError(details.error, 400);
     return {
       suggestion: { ...value, title: details.details.title, id: crypto.randomUUID() },

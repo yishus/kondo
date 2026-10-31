@@ -52,14 +52,14 @@
   --background: #191919;
   --surface: #232323;
   --muted: #2b2b2b;
-  --muted-foreground: #a0a0a0;
-  --foreground: #eee;
-  --secondary-foreground: #bcbcbc;
+  --muted-foreground: #b3b3b3;
+  --foreground: #f5f5f5;
+  --secondary-foreground: #d4d4d4;
   --border: #353535;
   --input: #505050;
-  --primary: #eee;
-  --primary-hover: #ccc;
-  --primary-foreground: #202020;
+  --primary: #f5f5f5;
+  --primary-hover: #ddd;
+  --primary-foreground: #171717;
   --destructive: #ee9b96;
   --shadow: 0 1px 4px rgb(0 0 0 / 15%);
 }

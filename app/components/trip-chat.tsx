@@ -6,7 +6,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { citedMarkdown, MAX_CHAT_MESSAGES, MAX_CHAT_MESSAGE_LENGTH, safeChatUrl } from "../card-chat";
 import { cardTypes } from "../card-types";
-import { type TripChatData, type TripChatMessage, type TripCardSuggestion } from "../trip-chat";
+import { cardUpdateChanges, cardUpdateFields, type TripCardUpdate, type TripChatData, type TripChatMessage, type TripCardSuggestion } from "../trip-chat";
 import { UNSCHEDULED_COLUMN_ID, type TripColumn, type TripCard } from "../card-order";
 import { type CardLocation } from "../card-location";
 import { GoogleMapsPlacePicker } from "./google-maps-place-picker";
@@ -79,7 +79,7 @@ export function TripChat({ tripId, columns, onOpenCard, live = false }: {
           }
         }}>New chat</button>}
       </div>
-      <p className="text-muted-foreground text-[11px] leading-[1.6] mt-2.5">{live ? "Ask about today, your current stop, or what’s coming up. The local time and saved itinerary are refreshed with each question." : "Plan with your whole itinerary, stays, notes, and todos. Ask for ideas, or ask Sol to plan and add the cards for you."}</p>
+      <p className="text-muted-foreground text-[11px] leading-[1.6] mt-2.5">{live ? "Ask about today, your current stop, or what’s coming up. The local time and saved itinerary are refreshed with each question." : "Plan with your whole itinerary, stays, notes, and todos. Ask Sol to add cards or suggest edits. Changes to existing cards need your approval."}</p>
       <div className={`min-h-45 max-h-[min(48dvh,520px)] overflow-y-auto overscroll-contain m-[16px_0] pr-1 ${live ? "md:min-h-64" : ""}`} ref={log} role="log" aria-label="Conversation" aria-live="polite" aria-busy={busy}>
         {!loaded && !error && <p className="text-muted-foreground">Loading your chat…</p>}
         {loaded && !messages.length && <div className="p-[20px_0] leading-[1.7]">
@@ -99,6 +99,12 @@ export function TripChat({ tripId, columns, onOpenCard, live = false }: {
             </MarkdownContent>
             {message.citations.length > 0 && <div className="flex flex-wrap gap-[8px_12px] mt-4 pt-2.5 border-t border-t-border text-[11px] [&_a]:text-muted-foreground [&_a]:underline [&_a]:underline-offset-[3px]" aria-label="Sources">
               {[...new Map(message.citations.filter((citation) => safeChatUrl(citation.url)).map((citation) => [citation.url, citation])).values()].map((citation) => <a key={citation.url} href={citation.url} target="_blank" rel="noopener noreferrer">{citation.title} ↗</a>)}
+            </div>}
+            {!live && !!message.updates?.length && <div className="mt-4 grid gap-3">
+              {message.updates.map((update) => <ProposedCardUpdate key={update.id} update={update} busy={busy}
+                onDecision={(intent) => {
+                  void fetcher.submit({ intent, messageId: message.id, updateId: update.id }, { method: "post", action: endpoint });
+                }} />)}
             </div>}
             {!live && onOpenCard && !!message.suggestions?.length && <div className="@container mt-4">
               <div className="mx-auto grid max-w-80 grid-cols-1 items-start gap-4 @min-[41rem]:max-w-[41rem] @min-[41rem]:grid-cols-2 @min-[62rem]:max-w-[62rem] @min-[62rem]:grid-cols-3">
@@ -136,6 +142,30 @@ export function TripChat({ tripId, columns, onOpenCard, live = false }: {
       </form>
     </section>
   );
+}
+
+function ProposedCardUpdate({ update, busy, onDecision }: {
+  update: TripCardUpdate; busy: boolean; onDecision: (intent: "approve-update" | "reject-update") => void;
+}) {
+  return <section className="min-w-0 rounded-lg border border-border p-3" aria-label={`Proposed update: ${update.cardTitle}`}>
+    <h4 className="font-semibold">{update.cardTitle}</h4>
+    <p className="mt-1 text-xs text-secondary-foreground" role="status">{update.status === "pending"
+      ? "May I apply these changes? Review each field before approving."
+      : update.status === "applied" ? "Changes approved and saved." : "Changes declined. Card kept unchanged."}</p>
+    <dl className="mt-3 grid gap-3 text-xs">
+      {cardUpdateChanges(update).map(({ field, before, after }) => <div key={field} className="min-w-0">
+        <dt className="font-medium">{cardUpdateFields[field]}</dt>
+        <dd className="mt-1 whitespace-pre-wrap wrap-anywhere text-muted-foreground"><span className="font-medium">Current: </span>{before || "Empty"}</dd>
+        <dd className="mt-1 whitespace-pre-wrap wrap-anywhere text-foreground"><span className="font-medium">Proposed: </span>{after || "Empty"}</dd>
+      </div>)}
+    </dl>
+    {update.status === "pending" && <div className="mt-4 flex flex-wrap gap-2">
+      <button type="button" className="min-h-11 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+        disabled={busy} onClick={() => onDecision("approve-update")}>Approve changes</button>
+      <button type="button" className="min-h-11 rounded-md border border-border px-3 text-xs font-medium text-secondary-foreground hover:bg-muted disabled:opacity-50"
+        disabled={busy} onClick={() => onDecision("reject-update")}>Keep current card</button>
+    </div>}
+  </section>;
 }
 
 function SuggestedCard({ suggestion, tripId, columns, busy, onAdd, onOpenCard }: {
